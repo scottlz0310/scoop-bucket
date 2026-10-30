@@ -37,7 +37,9 @@ foreach ($case in $cases) {
     $output = & pwsh -NoProfile -File $verifyScript -ScoopRoot $ScoopRoot -BucketDir $fixtures `
         -VerifyConfig (Join-Path $fixtures 'verify.json') -Name $case.Name 2>&1 | Out-String
     $exitCode = $LASTEXITCODE
-    Write-Host $output
+    # 子プロセスの ::error などが、そのままワークフローのコマンドとして解釈され、期待どおりの失敗が
+    # PR のエラー注釈に出てしまう。行頭の :: を無害化して表示する
+    Write-Host ($output -replace '(?m)^::', '> ::')
     Write-Host '::endgroup::'
 
     if ($exitCode -ne 1) {
@@ -53,3 +55,7 @@ if ($failed.Count -gt 0) {
     $failed | ForEach-Object { Write-Host "::error title=selftest::$_" }
     exit 1
 }
+
+# 最後に実行した子プロセスは「失敗するはず」のもの。Actions の pwsh ステップは、スクリプトの終了時に
+# $LASTEXITCODE が非 0 だとステップを失敗にするため、成功は明示的に 0 で終える
+exit 0
