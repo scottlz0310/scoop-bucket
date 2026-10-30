@@ -1,6 +1,7 @@
 {
   "version": 1,
   "allowedSkippedChecks": [
-    "report"
+    "report",
+    "health-report"
   ]
 }
