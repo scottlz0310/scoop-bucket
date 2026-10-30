@@ -1,0 +1,106 @@
+name: Add Manifest
+
+# 新しいアプリをバケットに載せるときの足場。GitHub の最新リリースから、標準形のマニフェスト（checkver / autoupdate /
+# .sha256 からのハッシュ取得）を生成し、Bot（GitHub App）名義で PR を作る。PR には Verify Manifests（隔離した Scoop への
+# インストール）が走る。マージは人が行う。更新は Update Manifests が追従する。
+#
+# 前提: Scoop が配るのはビルド済みバイナリ。リリースに Windows 用の ZIP と、その .sha256 が必要。
+# persist / pre_install などが要るアプリは、足場の対象外（手書きにする）。詳細は .github/scripts/new-manifest.ps1。
+# 信頼できる repo だけを対象にするため、このバケットと同じ owner の repo に限る。
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "載せる repo（owner/repo。このバケットと同じ owner）"
+        required: true
+        type: string
+      asset_pattern:
+        description: "Windows 用 ZIP の資産名。{name}（repo 名）と {version} を使える"
+        required: false
+        default: "{name}-x86_64-pc-windows-msvc.zip"
+        type: string
+      bin:
+        description: "shim を作る実行ファイル（カンマ区切り）。空なら {repo 名}.exe"
+        required: false
+        type: string
+      shortcuts:
+        description: "スタートメニューのショートカット（カンマ区切りの 実行ファイル=表示名）。GUI アプリのとき"
+        required: false
+        type: string
+      description:
+        description: "説明。空なら GitHub の repo の説明"
+        required: false
+        type: string
+      license:
+        description: "ライセンス（SPDX）。空なら GitHub の判定。GitHub は二重ライセンス（MIT OR Apache-2.0 など）を認識しない"
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: add-manifest
+  cancel-in-progress: false
+
+jobs:
+  add:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout bucket
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # formatjson（Scoop 標準の整形）に使う。SHA 固定は verify.yml / update.yml と共通の action に置く。
+      - uses: ./.github/actions/setup-scoop
+
+      # 入力は env 経由で渡し、シェルやスクリプトの文として展開しない（コマンドインジェクションの防止）。
+      # 値の検証は new-manifest.ps1 が行う（owner の制限、形式、パスの脱出など）。
+      - name: Generate manifest
+        id: generate
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REPOSITORY: ${{ inputs.repository }}
+          INPUT_ASSET_PATTERN: ${{ inputs.asset_pattern }}
+          INPUT_BIN: ${{ inputs.bin }}
+          INPUT_SHORTCUTS: ${{ inputs.shortcuts }}
+          INPUT_DESCRIPTION: ${{ inputs.description }}
+          INPUT_LICENSE: ${{ inputs.license }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          $params = @{
+              Repository   = $env:INPUT_REPOSITORY
+              AllowedOwner = $env:OWNER
+              OutputDir    = 'bucket'
+              ScoopRoot    = './scoop'
+          }
+          foreach ($pair in @(
+              @('AssetPattern', $env:INPUT_ASSET_PATTERN), @('Bin', $env:INPUT_BIN), @('Shortcuts', $env:INPUT_SHORTCUTS),
+              @('Description', $env:INPUT_DESCRIPTION), @('License', $env:INPUT_LICENSE))) {
+              if ($pair[1]) { $params[$pair[0]] = $pair[1] }
+          }
+          ./.github/scripts/new-manifest.ps1 @params
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # 生成の後に発行する（Scoop 本体やスクリプトの実行中に、書き込み権限つきトークンを持たないため）。
+      - name: Generate GitHub App Token
+        id: app_token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Open pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+          MANIFEST: bucket/${{ steps.generate.outputs.name }}.json
+          SOURCE_REPOSITORY: ${{ inputs.repository }}
+        run: bash .github/scripts/open-add-pr.sh

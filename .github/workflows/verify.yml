@@ -21,6 +21,11 @@ on:
       - .github/scripts/notify-update-failures.test.sh
       - .review-raven/validate-ci-policy.sh
       - .review-raven/validate-ci-policy.test.sh
+      - .github/scripts/new-manifest.ps1
+      - .github/scripts/new-manifest.selftest.ps1
+      - .github/scripts/remote-text.ps1
+      - .github/scripts/open-add-pr.sh
+      - .github/scripts/open-add-pr.test.sh
       - .github/actions/setup-scoop/**
       - .github/workflows/verify.yml
 
@@ -85,4 +90,8 @@ jobs:
           bash ./.github/scripts/notify-update-failures.test.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bash ./.review-raven/validate-ci-policy.test.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./.github/scripts/new-manifest.selftest.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bash ./.github/scripts/open-add-pr.test.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
