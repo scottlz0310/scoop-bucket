@@ -1,0 +1,31 @@
+name: Validate Renovate Config
+
+# renovate.json の変更を、Renovate 公式の renovate-config-validator で検証する。
+# update.yml の paths には renovate.json が含まれず、設定だけの PR では CI が起動しないため、独立させている。
+
+on:
+  pull_request:
+    paths:
+      - renovate.json
+      - .github/workflows/validate-renovate.yml
+
+permissions: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      # Renovate は Node 向けのツールで、Bun のランタイムでは動かない。`bunx --bun` にすると、
+      # ネイティブモジュール re2 が Linux で `undefined symbol` となりクラッシュする（exit 127。確認済み）。
+      # このため --bun は付けず、bunx が Renovate の実行ファイルの shebang に従って Node で動かす。
+      # ここでの Node は Renovate 自身の実行環境であり、このリポジトリのコードは Node に依存しない。
+      - name: Validate renovate.json
+        run: bunx --package renovate renovate-config-validator renovate.json
