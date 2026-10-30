@@ -22,6 +22,12 @@ scoop install <app>
 |---|---|
 | [**clp2cfg**](https://github.com/scottlz0310/clp2cfg) | コピーしたMCP設定スニペットを自動正規化し、各種AIクライアントの設定へ安全に差分マージする超軽量デスクトップGUIツール |
 
+## マニフェストの自動更新
+
+`checkver` / `autoupdate` を持つマニフェストは、GitHub Actions（`Update Manifests`）が毎日 1 回新しいリリースを確認し、更新があれば更新 PR を作ります。`main` への直接 push はできないため、PR のマージは手動です。
+
+リリース直後に反映したいときは、Actions の「Update Manifests」から「Run workflow」で手動起動できます。
+
 ## ライセンス
 
 [CC0 1.0 Universal](LICENSE) または [MIT License](LICENSE-MIT)

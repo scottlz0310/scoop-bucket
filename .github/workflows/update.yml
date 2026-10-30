@@ -1,0 +1,78 @@
+name: Update Manifests
+
+# 毎日 1 回、Scoop 標準の checkver / autoupdate でマニフェストの新バージョンを確認し、
+# 更新があれば Bot（GitHub App）名義で更新 PR を作る。main への直接 push は ruleset で禁止されているため、
+# 更新は必ず PR になり、マージは人が行う。
+# 即時に反映したいときは、Actions の「Run workflow」（workflow_dispatch）から手動で起動する。
+# pull_request では checkver の確認だけを行い、PR は作らない（workflow / マニフェスト変更の検証用）。
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/update.yml
+      - .github/scripts/**
+      - bucket/**
+
+permissions: {}
+
+concurrency:
+  group: update-manifests
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout bucket
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # checkver.ps1 は Scoop 本体のライブラリを使う。再現性のため SHA で固定する。
+      - name: Checkout Scoop
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ScoopInstaller/Scoop
+          ref: e6aa3b366bdee8ed138c1e0f7b85192ebdd35d0f # v0.6.0
+          path: scoop
+          persist-credentials: false
+
+      - name: Check and update manifests
+        shell: pwsh
+        run: ./scoop/bin/checkver.ps1 -Dir bucket -Update -ThrowError
+
+      - name: Detect changes
+        id: changes
+        shell: bash
+        run: |
+          if git diff --quiet -- bucket; then
+            echo "更新はありません"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git --no-pager diff -- bucket
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # checkver の実行後に発行する（Scoop 本体の実行中に書き込み権限つきトークンを持たないため）。
+      - name: Generate GitHub App Token
+        id: app_token
+        if: steps.changes.outputs.changed == 'true' && github.event_name != 'pull_request'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Open update pull request
+        if: steps.changes.outputs.changed == 'true' && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: bash .github/scripts/open-update-prs.sh
