@@ -23,6 +23,9 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
-      # --bun を付けないと、bunx は実行ファイルの shebang に従って Node で動かす。Bun のランタイムで実行する
+      # Renovate は Node 向けのツールで、Bun のランタイムでは動かない。`bunx --bun` にすると、
+      # ネイティブモジュール re2 が Linux で `undefined symbol` となりクラッシュする（exit 127。確認済み）。
+      # このため --bun は付けず、bunx が Renovate の実行ファイルの shebang に従って Node で動かす。
+      # ここでの Node は Renovate 自身の実行環境であり、このリポジトリのコードは Node に依存しない。
       - name: Validate renovate.json
-        run: bunx --bun --package renovate renovate-config-validator renovate.json
+        run: bunx --package renovate renovate-config-validator renovate.json
