@@ -59,7 +59,7 @@ Actions の「Add Manifest」から「Run workflow」で `owner/repo` を入力�
 
 ## レビュー対応の CI 判定（`.review-raven/ci-policy.json`）
 
-`Update Manifests` と `Health Check` の `report` ジョブは、PR では Issue を作らない設計のため、必ず `skipped` になります。レビュー対応の完了記録の検証（`mcp-docker reviewgate validate`）は、`skipped` を一律には許さず、リポジトリが名前を明示した check だけを成功として扱います。その宣言が `.review-raven/ci-policy.json` です。
+`Update Manifests` の `report` ジョブと `Health Check` の `health-report` ジョブは、PR では Issue を作らない設計のため、必ず `skipped` になります。ジョブ名を分けているのは、同じ名前の check run が複数あると、完了記録の検証が拒否するためです。レビュー対応の完了記録の検証（`mcp-docker reviewgate validate`）は、`skipped` を一律には許さず、リポジトリが名前を明示した check だけを成功として扱います。その宣言が `.review-raven/ci-policy.json` です。
 
 - 宣言は、**PR の HEAD ではなく、base ref（`main`）のファイルだけ**が読まれます。PR 自身が、自分の skip を許可することはできません。このファイルを追加・変更する PR は、その PR のレビューには反映されません。
 - 許可するのは、名前が完全一致する `skipped` だけです。本来動くべき check（`verify` など）が黙って `skipped` になった場合は、許可されず、失敗として扱われます。

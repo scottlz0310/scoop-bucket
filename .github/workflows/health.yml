@@ -8,7 +8,7 @@ name: Health Check
 # pull_request では検査だけを行い、Issue は作らない（workflow / スクリプトの変更の検証用）。
 # 通知の仕組みは update.yml と共通（notify-failures.sh）。
 #
-# health ジョブは書き込み権限を持たず、結果の JSON だけを report ジョブに渡す（Scoop 本体のスクリプトを実行する間に、
+# health ジョブは書き込み権限を持たず、結果の JSON だけを health-report ジョブに渡す（Scoop 本体のスクリプトを実行する間に、
 # Issue や workflow を操作できる権限を持たないため）。
 
 on:
@@ -65,7 +65,9 @@ jobs:
           foreach ($f in $failed) { Write-Host "::error title=$($f.name)::リンク切れまたはハッシュ不一致" }
           if ($failed.Count -gt 0) { exit 1 }
 
-  report:
+  # ジョブ名は、update.yml の report と別にする。reviewgate は、同じ名前の check run が複数あると完了記録を拒否する。
+  # PR では必ず skipped になるため、この名前は .review-raven/ci-policy.json で許可している。
+  health-report:
     needs: health
     # health が失敗しても（失敗の通知のために）実行する。pull_request では Issue を作らない。
     if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.health.result != 'skipped' }}
