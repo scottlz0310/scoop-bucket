@@ -124,7 +124,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: bash .github/scripts/notify-update-failures.sh "$RUNNER_TEMP/check-result/check-result.json"
+        run: bash .github/scripts/notify-failures.sh "$RUNNER_TEMP/check-result/check-result.json" update
 
       # scheduled workflow は、リポジトリに 60 日間活動が無いと GitHub に無効化される。
       # 有効化の API を毎回呼んで、無効化を避ける（効果は未検証。失敗しても通知や更新には影響させない）。

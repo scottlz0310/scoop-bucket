@@ -1,0 +1,116 @@
+name: Health Check
+
+# 週 1 回、すべてのマニフェストの URL のリンク切れと、ハッシュの不一致を検査する。
+# リリース資産が後から差し替えられた・削除されたとき、利用者が scoop install するまで気づけないのを防ぐ。
+# 検査は Scoop 標準の checkurls / checkhashes を使い、マニフェストごとに隔離して実行する（health-check.ps1）。
+# 不一致やリンク切れは、マニフェストごとに Issue で通知し、解消すると自動で閉じる。検査の実行自体が失敗したときも、Issue で通知する。
+# 限界: ハッシュの出所は、リリース資産自身（.sha256）。資産の差し替え（不一致）は検出できるが、リリースそのものの改ざんは検出できない。
+# pull_request では検査だけを行い、Issue は作らない（workflow / スクリプトの変更の検証用）。
+# 通知の仕組みは update.yml と共通（notify-failures.sh）。
+#
+# health ジョブは書き込み権限を持たず、結果の JSON だけを report ジョブに渡す（Scoop 本体のスクリプトを実行する間に、
+# Issue や workflow を操作できる権限を持たないため）。
+
+on:
+  schedule:
+    - cron: "43 3 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/health.yml
+      - .github/scripts/health-check.ps1
+      - .github/scripts/notify-failures.sh
+      - .github/actions/setup-scoop/**
+
+permissions: {}
+
+concurrency:
+  group: health-check
+  cancel-in-progress: false
+
+jobs:
+  health:
+    runs-on: windows-latest
+    # ダウンロードが止まっても、実行が終わらなくなるのを避ける
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout bucket
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scoop
+
+      - name: Check URLs and hashes
+        shell: pwsh
+        run: ./.github/scripts/health-check.ps1 -ScoopRoot ./scoop -ResultPath "$env:RUNNER_TEMP/health-result.json"
+
+      - name: Upload health result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: health-result
+          path: ${{ runner.temp }}/health-result.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # 結果を記録してから、失敗があれば実行を失敗にする
+      - name: Fail if any manifest failed
+        shell: pwsh
+        run: |
+          $results = @(Get-Content "$env:RUNNER_TEMP/health-result.json" -Raw | ConvertFrom-Json)
+          $failed = @($results | Where-Object { -not $_.ok })
+          foreach ($f in $failed) { Write-Host "::error title=$($f.name)::リンク切れまたはハッシュ不一致" }
+          if ($failed.Count -gt 0) { exit 1 }
+
+  report:
+    needs: health
+    # health が失敗しても（失敗の通知のために）実行する。pull_request では Issue を作らない。
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.health.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download health result
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: health-result
+          path: ${{ runner.temp }}/health-result
+
+      # 検査の結果が得られたかを、名前 _run の結果として加える。得られなかった（health ジョブが結果を出す前に失敗した）
+      # ときは、検査の実行自体の失敗として通知し、次に結果が得られたときに閉じる。
+      - name: Build notification input
+        env:
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+        run: |
+          if [ "$DOWNLOAD_OUTCOME" = success ]; then
+            jq '. + [{"name":"_run","ok":true,"message":""}]' "$RUNNER_TEMP/health-result/health-result.json" > "$RUNNER_TEMP/notify.json"
+          else
+            jq -n '[{"name":"_run","ok":false,"message":"検査の結果が得られなかった（health ジョブが結果を出す前に失敗した、または結果を取得できなかった）。実行のログを確認する。"}]' > "$RUNNER_TEMP/notify.json"
+          fi
+
+      - name: Notify failures
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/notify-failures.sh "$RUNNER_TEMP/notify.json" health
+
+      # scheduled workflow は、リポジトリに 60 日間活動が無いと GitHub に無効化される。
+      # 有効化の API を毎回呼んで、無効化を避ける（効果は未検証。失敗しても通知には影響させない）。
+      - name: Keep schedule enabled
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh workflow enable health.yml --repo "$REPOSITORY"

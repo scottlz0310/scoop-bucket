@@ -4,7 +4,7 @@ name: Verify Manifests
 # 更新 PR（Update Manifests が App トークンで作る PR）でも起動する。
 # マニフェストが変わっていない（workflow やスクリプトだけの変更）ときは、すべてのマニフェストを検証する。
 # selftest は、スクリプト自体の回帰テスト。意図的に壊した fixture で、失敗を検出できることを確認する
-# （検証スクリプト、更新の失敗の隔離、失敗の通知）。
+# （検証スクリプト、更新の失敗の隔離、失敗の通知、週次の健全性検査）。
 # マニフェストだけを変える PR（更新 PR など）では不要なので、.github 配下の変更があるときだけ実行する。
 
 on:
@@ -17,8 +17,11 @@ on:
       - .github/scripts/verify-manifests.selftest.ps1
       - .github/scripts/check-manifests.ps1
       - .github/scripts/check-manifests.selftest.ps1
-      - .github/scripts/notify-update-failures.sh
-      - .github/scripts/notify-update-failures.test.sh
+      - .github/scripts/notify-failures.sh
+      - .github/scripts/notify-failures.test.sh
+      - .github/scripts/health-check.ps1
+      - .github/scripts/health-check.selftest.ps1
+      - .github/health-fixtures/**
       - .review-raven/validate-ci-policy.sh
       - .review-raven/validate-ci-policy.test.sh
       - .github/scripts/new-manifest.ps1
@@ -87,7 +90,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ./.github/scripts/check-manifests.selftest.ps1 -ScoopRoot ./scoop
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          bash ./.github/scripts/notify-update-failures.test.sh
+          bash ./.github/scripts/notify-failures.test.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./.github/scripts/health-check.selftest.ps1 -ScoopRoot ./scoop
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bash ./.review-raven/validate-ci-policy.test.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
