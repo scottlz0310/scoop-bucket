@@ -86,6 +86,11 @@ jobs:
           ./.github/scripts/new-manifest.ps1 @params
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # README の登録アプリ一覧は、マニフェストから生成する。同じ PR に含めないと、Check README が失敗する。
+      - name: Update README app list
+        shell: bash
+        run: bash .github/scripts/render-readme-apps.sh
+
       # 生成の後に発行する（Scoop 本体やスクリプトの実行中に、書き込み権限つきトークンを持たないため）。
       - name: Generate GitHub App Token
         id: app_token

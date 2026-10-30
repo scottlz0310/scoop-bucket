@@ -1,0 +1,33 @@
+name: Check README
+
+# README の登録アプリ一覧（マーカーで囲んだ範囲）が、bucket/*.json の description と homepage から生成した内容と
+# 一致することを検査する。ずれていれば失敗する。直すには .github/scripts/render-readme-apps.sh を実行する。
+# 更新 PR（Update Manifests）は version / url / hash だけを変えるので、一覧は変わらず、この検査は通る。
+# render-readme-apps.test.sh は、生成スクリプトの回帰テスト。
+
+on:
+  pull_request:
+    paths:
+      - bucket/**
+      - README.md
+      - .github/scripts/render-readme-apps.sh
+      - .github/scripts/render-readme-apps.test.sh
+      - .github/workflows/check-readme.yml
+
+permissions: {}
+
+jobs:
+  readme:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Self-test script
+        run: bash .github/scripts/render-readme-apps.test.sh
+
+      - name: Check README app list
+        run: bash .github/scripts/render-readme-apps.sh --check

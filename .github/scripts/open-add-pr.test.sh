@@ -28,13 +28,14 @@ new_work_clone() {
     git config user.name t && git config user.email t@t
     mkdir -p bucket
     printf '%s' '{"version":"1.2.3","homepage":"https://github.com/o/app"}' > bucket/app.json
+    echo y >> README.md
   )
 }
 reset_remote() {
   rm -rf "$work/remote.git" "$work/seed"
   git init -q --bare -b main "$work/remote.git"
   git init -q -b main "$work/seed"
-  (cd "$work/seed" && git config user.name t && git config user.email t@t && echo x > README && git add . && git commit -qm init && git remote add origin "$work/remote.git" && git push -q origin main)
+  (cd "$work/seed" && git config user.name t && git config user.email t@t && echo x > README.md && git add . && git commit -qm init && git remote add origin "$work/remote.git" && git push -q origin main)
 }
 
 # 実行して、終了コードと、gh の呼び出し（pr list 以外）を返す
@@ -62,7 +63,7 @@ check "通常: 終了コード 0" "0" "$code"
 check "通常: ブランチ add/app を push した" "add/app" "$(remote_branch)"
 check "通常: PR を 1 件作った" "1" "$(creates)"
 check "通常: タイトルに名前と版" "1" "$(grep -c 'feat(app): マニフェストを追加 (v1.2.3)' "$work/log.txt")"
-check "通常: マニフェストをコミットした" "bucket/app.json" "$(git -C "$work/remote.git" show --name-only --format= add/app | tr -d '\n')"
+check "通常: マニフェストと README をコミットした" "README.mdbucket/app.json" "$(git -C "$work/remote.git" show --name-only --format= add/app | tr -d '\n')"
 
 reset_remote; new_work_clone
 export MOCK_FAIL_CREATE=1

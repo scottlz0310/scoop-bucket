@@ -18,9 +18,13 @@ scoop install <app>
 
 ## 登録アプリケーション一覧
 
+<!-- 次の一覧は .github/scripts/render-readme-apps.sh が bucket/*.json から生成する。直接編集しない -->
+<!-- apps:begin -->
 | アプリケーション | 説明 |
 |---|---|
-| [**clp2cfg**](https://github.com/scottlz0310/clp2cfg) | コピーしたMCP設定スニペットを自動正規化し、各種AIクライアントの設定へ安全に差分マージする超軽量デスクトップGUIツール |
+| [**agent-statusline**](https://github.com/scottlz0310/agent-statusline) | High-performance, zero-fork statusline for AI coding agents (Antigravity, Claude Code, GitHub Copilot) |
+| [**clp2cfg**](https://github.com/scottlz0310/clp2cfg) | Lightweight desktop GUI for parsing MCP server configurations and merging them into AI client configs |
+<!-- apps:end -->
 
 ## マニフェストの自動更新
 
@@ -36,6 +40,11 @@ Actions の「Add Manifest」から「Run workflow」で `owner/repo` を入力�
 - **対象**: このバケットと同じ owner の repo だけです。`persist` / `pre_install` などが要るアプリは、足場の対象外（手書きにします）。
 - **ライセンスの指定**: GitHub は二重ライセンス（`MIT OR Apache-2.0` など）を認識しません。その場合は `license` を指定してください。
 - 生成と PR の作成は `.github/scripts/new-manifest.ps1` と `open-add-pr.sh` です。
+- 上の「登録アプリケーション一覧」も同じ PR で更新されます。
+
+## 登録アプリケーション一覧の自動生成
+
+一覧は、`bucket/*.json` の `description` と `homepage` から `.github/scripts/render-readme-apps.sh` が生成します。生成範囲は README の `<!-- apps:begin -->` と `<!-- apps:end -->` の間だけで、直接編集しません。説明を変えたいときは、マニフェストの `description` を変えて、スクリプトを実行します。PR では `Check README` が、一覧がマニフェストと一致していることを検査します。
 
 ## レビュー対応の CI 判定（`.review-raven/ci-policy.json`）
 

@@ -35,7 +35,7 @@ if git_remote ls-remote --exit-code --heads origin "$branch" > /dev/null; then
   echo "$branch はリモートに残っています（前回の PR 作成が失敗した可能性）。再利用して PR を作成します"
 else
   git switch -c "$branch"
-  git add "$MANIFEST"
+  git add "$MANIFEST" README.md
   git commit -m "$title"
   git_remote push origin "$branch"
   git switch --detach "$start"
