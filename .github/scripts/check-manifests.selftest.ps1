@@ -13,6 +13,7 @@
     という元の不具合（checkver -Dir の一括実行）を再現するため。
     固定している不具合:
       - autoupdate-url: autoupdate の例外（-ThrowError で終了コードに反映される）
+      - invalid-json: 不正な JSON のマニフェストで例外が全体へ伝播し、後続が処理されず、結果の JSON も生成されない
       - checkver-url / checkver-regex: 最新版の取得先に届かない / 正規表現が一致しない。checkver はエラーを
         表示するだけで終了コード 0 になり、-ThrowError も効かない。「版を報告したか」まで見ないと成功と誤記録される
 .PARAMETER ScoopRoot
@@ -30,10 +31,12 @@ $fixtures = Join-Path $PSScriptRoot '../verify-fixtures'
 
 # Fixture: 失敗させる fixture の名前 / Version: 指定すると、マニフェストの版をこの値に書き換える
 # （checkver -Update は、最新版と現在の版が同じだと autoupdate を実行しないため、autoupdate の失敗を起こすには版を古くする）
+# Content: fixture の代わりに、この文字列をそのままマニフェストの内容にする
 $cases = @(
     @{ Name = 'autoupdate-url'; Fixture = 'broken-autoupdate-url'; Version = '0.0.1' }
     @{ Name = 'checkver-url';   Fixture = 'broken-checkver-url' }
     @{ Name = 'checkver-regex'; Fixture = 'broken-checkver-regex' }
+    @{ Name = 'invalid-json';   Content = '{invalid' }
 )
 
 function Test-Case {
@@ -44,7 +47,7 @@ function Test-Case {
     New-Item -ItemType Directory $work | Out-Null
     try {
         # 名前順で、失敗するものが先になるようにする（a-broken < b-good）
-        $broken = Get-Content (Join-Path $fixtures "$($Case.Fixture).json") -Raw
+        $broken = if ($Case.ContainsKey('Content')) { $Case.Content } else { Get-Content (Join-Path $fixtures "$($Case.Fixture).json") -Raw }
         if ($Case.ContainsKey('Version')) { $broken = $broken.Replace('"version": "0.1.0"', "`"version`": `"$($Case.Version)`"") }
         [IO.File]::WriteAllText((Join-Path $work 'a-broken.json'), $broken)
         Copy-Item (Join-Path $fixtures 'bad-format.json') (Join-Path $work 'b-good.json')
@@ -55,6 +58,8 @@ function Test-Case {
 
         $failed = @()
         if ($exitCode -ne 0) { $failed += "スクリプトが失敗した（終了コード $exitCode。常に 0 で終わるはず）" }
+        # 結果が無いと、後続の通知が何もできない。例外で止まらず、明確な失敗として返す
+        if (-not (Test-Path $resultPath)) { return $failed + '結果の JSON が生成されなかった' }
 
         $results = @(Get-Content $resultPath -Raw | ConvertFrom-Json)
         $byName = @{}

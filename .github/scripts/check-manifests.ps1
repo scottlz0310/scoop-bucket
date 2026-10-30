@@ -23,44 +23,67 @@ Set-StrictMode -Version Latest
 $ScoopRoot = Convert-Path $ScoopRoot
 $BucketDir = Convert-Path $BucketDir
 
+function New-Result {
+    param([string] $Name, [string] $Reason, [string[]] $Lines = @())
+    if (-not $Reason) { return [pscustomobject]@{ name = $Name; ok = $true; message = '' } }
+    # 通知に載せるのは末尾だけ（長い出力で Issue を埋めない）
+    $message = "$Reason`n" + (($Lines | Select-Object -Last 15) -join "`n")
+    if ($message.Length -gt 2000) { $message = $message.Substring($message.Length - 2000) }
+    return [pscustomobject]@{ name = $Name; ok = $false; message = $message }
+}
+
+function Test-OneManifest {
+    param([System.IO.FileInfo] $File)
+    $name = $File.BaseName
+    $original = $null
+
+    # このマニフェストで起きた例外（不正な JSON など）が、他のマニフェストの処理を止めないよう、ここで受ける
+    try {
+        $original = [IO.File]::ReadAllText($File.FullName)
+
+        # 不正な JSON のマニフェストは、checkver に渡す前に失敗として記録する（checkver は警告を出すだけで
+        # 終了コード 0 になる）
+        try {
+            $manifest = $original | ConvertFrom-Json
+        } catch {
+            return New-Result $name "マニフェストを JSON として読めない: $($_.Exception.Message)"
+        }
+
+        Write-Host "::group::$name"
+        # -ThrowError が無いと、checkver は更新中の例外を表示するだけで終了コード 0 を返し、失敗を見逃す
+        $lines = @(& pwsh -NoProfile -File (Join-Path $ScoopRoot 'bin/checkver.ps1') $name $BucketDir -Update -ThrowError 2>&1 |
+            ForEach-Object { $_.ToString() })
+        $exitCode = $LASTEXITCODE
+        $lines | Out-Host
+        Write-Host '::endgroup::'
+
+        # 終了コードが 0 でも、最新版を確認できたとは限らない。checkver は、最新版の取得先に届かない、
+        # 正規表現が一致しないといった失敗を、エラーを表示するだけで次へ進み（-ThrowError が効くのは
+        # autoupdate の例外だけ）、終了コード 0 で終わる。成功なら、「<名前>: <版>」の行（更新があれば
+        # 「 (scoop version is …)」が続く）を出力するので、それが出たかも見る。エラーの文には、数字を含まない
+        # 1 語の文があり得るため、版は数字を含む語とする。
+        $hasCheckver = $manifest.PSObject.Properties.Name -contains 'checkver'
+        $versionLine = "^$([regex]::Escape($name)): (?=\S*\d)\S+( \(scoop version is [^)]*\).*)?$"
+        $reportedVersion = @($lines | ForEach-Object { ($_ -replace '\x1b\[[0-9;]*m', '').Trim() } | Where-Object { $_ -match $versionLine })
+
+        $reason = $null
+        if ($exitCode -ne 0) {
+            $reason = "checkver が失敗した（終了コード $exitCode）"
+        } elseif ($hasCheckver -and $reportedVersion.Count -eq 0) {
+            $reason = '最新版を確認できなかった（checkver が版を報告しなかった。取得先に届かない、または正規表現が一致しない）'
+        }
+
+        if ($reason) { [IO.File]::WriteAllText($File.FullName, $original) }
+        return New-Result $name $reason $lines
+    } catch {
+        # 半端な書き換えが残らないよう、元の内容へ戻す（読めていれば）
+        if ($null -ne $original) { [IO.File]::WriteAllText($File.FullName, $original) }
+        return New-Result $name "想定外のエラー: $($_.Exception.Message)"
+    }
+}
+
 $results = foreach ($file in Get-ChildItem $BucketDir -Filter '*.json' | Sort-Object Name) {
-    $name = $file.BaseName
-    $original = [IO.File]::ReadAllText($file.FullName)
-
-    Write-Host "::group::$name"
-    # -ThrowError が無いと、checkver は更新中の例外を表示するだけで終了コード 0 を返し、失敗を見逃す
-    $lines = @(& pwsh -NoProfile -File (Join-Path $ScoopRoot 'bin/checkver.ps1') $name $BucketDir -Update -ThrowError 2>&1 |
-        ForEach-Object { $_.ToString() })
-    $exitCode = $LASTEXITCODE
-    $lines | Out-Host
-    Write-Host '::endgroup::'
-
-    # 終了コードが 0 でも、最新版を確認できたとは限らない。checkver は、最新版の取得先に届かない、
-    # 正規表現が一致しないといった失敗を、エラーを表示するだけで次へ進み（-ThrowError が効くのは
-    # autoupdate の例外だけ）、終了コード 0 で終わる。成功なら、「<名前>: <版>」の行（更新があれば
-    # 「 (scoop version is …)」が続く）を出力するので、それが出たかも見る。エラーの文には、数字を含まない
-    # 1 語の文があり得るため、版は数字を含む語とする。
-    $manifest = Get-Content $file.FullName -Raw | ConvertFrom-Json
-    $hasCheckver = $manifest.PSObject.Properties.Name -contains 'checkver'
-    $versionLine = "^$([regex]::Escape($name)): (?=\S*\d)\S+( \(scoop version is [^)]*\).*)?$"
-    $reportedVersion = @($lines | ForEach-Object { ($_ -replace '\x1b\[[0-9;]*m', '').Trim() } | Where-Object { $_ -match $versionLine })
-
-    $reason = $null
-    if ($exitCode -ne 0) {
-        $reason = "checkver が失敗した（終了コード $exitCode）"
-    } elseif ($hasCheckver -and $reportedVersion.Count -eq 0) {
-        $reason = '最新版を確認できなかった（checkver が版を報告しなかった。取得先に届かない、または正規表現が一致しない）'
-    }
-
-    if ($null -eq $reason) {
-        [pscustomobject]@{ name = $name; ok = $true; message = '' }
-    } else {
-        [IO.File]::WriteAllText($file.FullName, $original)
-        # 通知に載せるのは末尾だけ（長い出力で Issue を埋めない）
-        $message = "$reason`n" + (($lines | Select-Object -Last 15) -join "`n")
-        if ($message.Length -gt 2000) { $message = $message.Substring($message.Length - 2000) }
-        [pscustomobject]@{ name = $name; ok = $false; message = $message }
-    }
+    Test-OneManifest $file
 }
 
 # 結果が 1 件でも 0 件でも、配列として書き出す。
