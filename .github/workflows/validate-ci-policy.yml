@@ -1,0 +1,27 @@
+name: Validate CI Policy
+
+# .review-raven/ci-policy.json は、PR では skipped になる設計の check（Update Manifests の report ジョブなど）を、
+# レビュー対応の完了記録で成功として扱ってよい、という宣言（Mcp-Docker の reviewgate が base ref のファイルだけを読む）。
+# 形が不正だと、レビュー側は許可を推測せずに止まる。設定だけの PR では他の CI が起動しないため、独立させている。
+
+on:
+  pull_request:
+    paths:
+      - .review-raven/ci-policy.json
+      - .github/scripts/validate-ci-policy.sh
+      - .github/workflows/validate-ci-policy.yml
+
+permissions: {}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate ci-policy.json
+        run: bash .github/scripts/validate-ci-policy.sh .review-raven/ci-policy.json

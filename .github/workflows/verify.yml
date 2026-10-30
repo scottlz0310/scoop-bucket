@@ -19,6 +19,8 @@ on:
       - .github/scripts/check-manifests.selftest.ps1
       - .github/scripts/notify-update-failures.sh
       - .github/scripts/notify-update-failures.test.sh
+      - .github/scripts/validate-ci-policy.sh
+      - .github/scripts/validate-ci-policy.test.sh
       - .github/actions/setup-scoop/**
       - .github/workflows/verify.yml
 
@@ -81,4 +83,6 @@ jobs:
           ./.github/scripts/check-manifests.selftest.ps1 -ScoopRoot ./scoop
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bash ./.github/scripts/notify-update-failures.test.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bash ./.github/scripts/validate-ci-policy.test.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
