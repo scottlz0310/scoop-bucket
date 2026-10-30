@@ -1,0 +1,73 @@
+name: Verify Manifests
+
+# マニフェストを変更する PR で、インストールまで検証する。検査の内容は .github/scripts/verify-manifests.ps1 を参照。
+# 更新 PR（Update Manifests が App トークンで作る PR）でも起動する。
+# マニフェストが変わっていない（workflow やスクリプトだけの変更）ときは、すべてのマニフェストを検証する。
+# selftest は、検証スクリプト自体の回帰テスト。意図的に壊した fixture で、失敗を検出できることを確認する。
+# マニフェストだけを変える PR（更新 PR など）では不要なので、.github 配下の変更があるときだけ実行する。
+
+on:
+  pull_request:
+    paths:
+      - bucket/**
+      - .github/verify.json
+      - .github/verify-fixtures/**
+      - .github/scripts/verify-manifests.ps1
+      - .github/scripts/verify-manifests.selftest.ps1
+      - .github/actions/setup-scoop/**
+      - .github/workflows/verify.yml
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scoop
+
+      - name: Verify manifests
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # 変更されたマニフェスト（削除されたものを除く）。無ければ、すべてのマニフェスト
+          $names = @(git diff --name-only --diff-filter=d $env:BASE_SHA HEAD -- 'bucket/*.json' |
+              ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) })
+          if ($names.Count -eq 0) {
+              $names = @(Get-ChildItem bucket -Filter '*.json' | ForEach-Object { $_.BaseName })
+          }
+          if ($names.Count -eq 0) { throw 'bucket にマニフェストがありません' }
+          Write-Host "検証対象: $($names -join ', ')"
+          ./.github/scripts/verify-manifests.ps1 -ScoopRoot ./scoop -Name $names
+
+  selftest:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scoop
+
+      - name: Self-test verify-manifests.ps1
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # .github 配下の変更が無ければ（マニフェストだけの変更なら）省略する
+          $infra = @(git diff --name-only $env:BASE_SHA HEAD -- .github)
+          if ($infra.Count -eq 0) {
+              Write-Host '.github 配下に変更が無いため、selftest を省略する'
+              exit 0
+          }
+          ./.github/scripts/verify-manifests.selftest.ps1 -ScoopRoot ./scoop

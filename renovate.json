@@ -5,9 +5,9 @@
   ],
   "customManagers": [
     {
-      "description": "update.yml が SHA 固定で取得する Scoop 本体（checkout の repository / ref）を追従する。バケット固有のため共有プリセットにはしない",
+      "description": "setup-scoop が SHA 固定で取得する Scoop 本体（checkout の repository / ref）を追従する。バケット固有のため共有プリセットにはしない",
       "customType": "regex",
-      "managerFilePatterns": ["/^\\.github/workflows/update\\.yml$/"],
+      "managerFilePatterns": ["/^\\.github/actions/setup-scoop/action\\.yml$/"],
       "matchStrings": [
         "repository: (?<depName>ScoopInstaller/Scoop)\\s+ref: (?<currentDigest>[a-f0-9]{40}) # (?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"
       ],

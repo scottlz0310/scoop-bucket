@@ -1,0 +1,14 @@
+name: Setup Scoop
+description: >-
+  Scoop 本体を SHA 固定で ./scoop に取得する。checkver.ps1 や scoop.ps1 など、Scoop のスクリプトを使う workflow が共通で使う。
+  SHA の更新は Renovate が行う（renovate.json のカスタム regex manager が、このファイルを対象にしている）。
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ScoopInstaller/Scoop
+        ref: e6aa3b366bdee8ed138c1e0f7b85192ebdd35d0f # v0.6.0
+        path: scoop
+        persist-credentials: false

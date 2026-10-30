@@ -1,0 +1,11 @@
+{
+    "missing-shim": {
+        "commands": [
+            {
+                "since": "0.1.0",
+                "command": "clp2cfg-cli",
+                "args": ["--version"]
+            }
+        ]
+    }
+}
