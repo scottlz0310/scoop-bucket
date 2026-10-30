@@ -1,0 +1,24 @@
+{
+    "version": "0.5.0",
+    "description": "High-performance, zero-fork statusline for AI coding agents (Antigravity, Claude Code, GitHub Copilot)",
+    "homepage": "https://github.com/scottlz0310/agent-statusline",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/scottlz0310/agent-statusline/releases/download/v0.5.0/agent-statusline-x86_64-pc-windows-msvc.zip",
+            "hash": "35cf895d1e5464644043478ee2f08c0e21bbaca0d33298069923d1fc15a7c9bc"
+        }
+    },
+    "bin": "agent-statusline.exe",
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/scottlz0310/agent-statusline/releases/download/v$version/agent-statusline-x86_64-pc-windows-msvc.zip",
+                "hash": {
+                    "url": "$url.sha256"
+                }
+            }
+        }
+    }
+}
