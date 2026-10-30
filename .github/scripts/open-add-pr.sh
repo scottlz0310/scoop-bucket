@@ -35,7 +35,7 @@ if git_remote ls-remote --exit-code --heads origin "$branch" > /dev/null; then
   echo "$branch はリモートに残っています（前回の PR 作成が失敗した可能性）。再利用して PR を作成します"
 else
   git switch -c "$branch"
-  git add "$MANIFEST"
+  git add "$MANIFEST" README.md
   git commit -m "$title"
   git_remote push origin "$branch"
   git switch --detach "$start"
@@ -51,6 +51,6 @@ gh pr create --repo "$REPOSITORY" --base "$BASE_BRANCH" --head "$branch" \
     "" \
     "### マージ前に確認すること" \
     "- [ ] \`Verify Manifests\`（隔離した Scoop へのインストール）が成功している" \
-    "- [ ] \`description\` / \`license\` / \`bin\` / \`shortcuts\` が、アプリの実際の内容と合っている" \
+    "- [ ] \`description\` / \`license\` / \`bin\` / \`shortcuts\` が、アプリの実際の内容と合っている。\`description\` は日本語にする（README の一覧に表示される。変えたら \`.github/scripts/render-readme-apps.sh\` を実行して、一覧も同じ PR で更新する）" \
     "- [ ] ヘッドレスで確認できるコマンド（\`--version\` など）があれば、\`.github/verify.json\` に追加する" \
     "- [ ] \`persist\` / \`pre_install\` などが要るアプリではないこと（足場は、これらを生成しない）")"

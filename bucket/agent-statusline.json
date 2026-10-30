@@ -1,6 +1,6 @@
 {
     "version": "0.5.0",
-    "description": "High-performance, zero-fork statusline for AI coding agents (Antigravity, Claude Code, GitHub Copilot)",
+    "description": "カスタムステータスライン対応の各種CLI(claude-code copilot-cli antigravity-cli)等のプロンプト表示を超高速化するRust製ステータスライン。TUI設定機能・レートリミット監視・自動配布対応。",
     "homepage": "https://github.com/scottlz0310/agent-statusline",
     "license": "MIT",
     "architecture": {

@@ -66,7 +66,8 @@ function Invoke-Case {
 }
 
 $clpArgs = @{
-    Description = 'Lightweight desktop GUI for parsing MCP server configurations and merging them into AI client configs'
+    # description は入力をそのまま通すだけなので、実物から読む（説明を直すたびに、このテストを直さなくて済む）
+    Description = (Get-Content (Join-Path $RepoRoot 'bucket/clp2cfg.json') -Raw | ConvertFrom-Json).description
     License     = 'MIT OR Apache-2.0'
     Shortcuts   = 'clp2cfg.exe=clp2cfg'
 }
