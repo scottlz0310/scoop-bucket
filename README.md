@@ -32,6 +32,17 @@ scoop install <app>
 
 リリース直後に反映したいときは、Actions の「Update Manifests」から「Run workflow」で手動起動できます。
 
+## 週次の健全性検査
+
+リリース資産が後から差し替えられたり削除されたりすると、マニフェストの URL とハッシュが実際の資産と合わなくなります。この状態は、利用者が `scoop install` したときに初めて分かります。そのため、`Health Check` が毎週月曜に、すべてのマニフェストの URL のリンク切れ（`checkurls`）と、ハッシュの不一致（`checkhashes`）を検査します。
+
+- 検出すると、マニフェストごとに Issue（`health: <名前> のリンク切れまたはハッシュ不一致を検出した`）を 1 件起票します。すでに開いていれば本文を更新し、解消すると自動で閉じます。
+- 検査の実行自体が失敗したとき（結果が得られなかったとき）も、Issue（`health: 週次の検査の実行に失敗している`）で通知します。
+- 一時的なネットワーク障害でも、その週は検出されます。次の週に解消すれば、自動で閉じます（再試行はしません）。
+- **限界**: ハッシュの出所は、リリース資産自身（`.sha256`）です。資産が**差し替えられた**こと（不一致）は検出できますが、リリースそのものが改ざんされた場合は検出できません。後者に備えるには、build provenance attestation と `gh attestation verify` が要ります（このバケットの範囲外）。
+- アプリが増えると、検査の時間と通信量が増えます（`checkhashes` は資産をすべてダウンロードします）。増えたら、週次の対象を分割します。
+- 手動で実行したいときは、Actions の「Health Check」から「Run workflow」で起動できます。
+
 ## 新しいアプリの追加
 
 Actions の「Add Manifest」から「Run workflow」で `owner/repo` を入力すると、その repo の最新リリースから、標準形のマニフェスト（`checkver` / `autoupdate` / `.sha256` からのハッシュ取得）を生成する PR が作られます。PR には「Verify Manifests」（隔離した Scoop へのインストール）が走ります。マージは手動です。
@@ -48,7 +59,7 @@ Actions の「Add Manifest」から「Run workflow」で `owner/repo` を入力�
 
 ## レビュー対応の CI 判定（`.review-raven/ci-policy.json`）
 
-`Update Manifests` の `report` ジョブは、PR では Issue を作らない設計のため、必ず `skipped` になります。レビュー対応の完了記録の検証（`mcp-docker reviewgate validate`）は、`skipped` を一律には許さず、リポジトリが名前を明示した check だけを成功として扱います。その宣言が `.review-raven/ci-policy.json` です。
+`Update Manifests` の `report` ジョブと `Health Check` の `health-report` ジョブは、PR では Issue を作らない設計のため、必ず `skipped` になります。ジョブ名を分けているのは、同じ名前の check run が複数あると、完了記録の検証が拒否するためです。レビュー対応の完了記録の検証（`mcp-docker reviewgate validate`）は、`skipped` を一律には許さず、リポジトリが名前を明示した check だけを成功として扱います。その宣言が `.review-raven/ci-policy.json` です。
 
 - 宣言は、**PR の HEAD ではなく、base ref（`main`）のファイルだけ**が読まれます。PR 自身が、自分の skip を許可することはできません。このファイルを追加・変更する PR は、その PR のレビューには反映されません。
 - 許可するのは、名前が完全一致する `skipped` だけです。本来動くべき check（`verify` など）が黙って `skipped` になった場合は、許可されず、失敗として扱われます。
