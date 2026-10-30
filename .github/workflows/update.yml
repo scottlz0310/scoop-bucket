@@ -13,6 +13,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/update.yml
+      - .github/scripts/**
       - bucket/**
 
 permissions: {}
@@ -73,41 +74,5 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
           REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-
-          # 変更されたマニフェストごとに、版を読み取って 1 PR にする
-          for manifest in $(git diff --name-only -- bucket); do
-            name="$(basename "$manifest" .json)"
-            version="$(jq -r '.version' "$manifest")"
-            homepage="$(jq -r '.homepage' "$manifest")"
-            branch="update/${name}-${version}"
-
-            if [ -n "$(gh pr list --repo "$REPOSITORY" --head "$branch" --state all --json number --jq '.[].number')" ]; then
-              echo "$branch の PR はすでにあります。スキップします"
-              git checkout -- "$manifest"
-              continue
-            fi
-
-            git config user.name "${APP_SLUG}[bot]"
-            git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
-            git switch -c "$branch"
-            git add "$manifest"
-            git commit -m "chore($name): v${version} に更新"
-
-            auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
-              push origin "$branch"
-
-            gh pr create --repo "$REPOSITORY" --base main --head "$branch" \
-              --title "chore($name): v${version} に更新" \
-              --body "$(printf '%s\n' \
-                "checkver / autoupdate による自動更新です。" \
-                "" \
-                "- リリース: ${homepage}/releases/tag/v${version}" \
-                "- ハッシュは、リリースに添付された \`.sha256\` から取得しています。" \
-                "" \
-                "マージ前に、差分（版・URL・ハッシュ・\`bin\`）がリリースの内容と一致することを確認してください。")"
-
-            git switch main
-          done
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: bash .github/scripts/open-update-prs.sh
