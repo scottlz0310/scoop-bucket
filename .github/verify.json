@@ -1,0 +1,11 @@
+{
+    "clp2cfg": {
+        "commands": [
+            {
+                "since": "0.2.0",
+                "command": "clp2cfg-cli",
+                "args": ["--version"]
+            }
+        ]
+    }
+}

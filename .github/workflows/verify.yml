@@ -1,0 +1,44 @@
+name: Verify Manifests
+
+# マニフェストを変更する PR で、インストールまで検証する。検査の内容は .github/scripts/verify-manifests.ps1 を参照。
+# 更新 PR（Update Manifests が App トークンで作る PR）でも起動する。
+# マニフェストが変わっていない（workflow やスクリプトだけの変更）ときは、すべてのマニフェストを検証する。
+
+on:
+  pull_request:
+    paths:
+      - bucket/**
+      - .github/verify.json
+      - .github/scripts/verify-manifests.ps1
+      - .github/actions/setup-scoop/**
+      - .github/workflows/verify.yml
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-scoop
+
+      - name: Verify manifests
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          # 変更されたマニフェスト（削除されたものを除く）。無ければ、すべてのマニフェスト
+          $names = @(git diff --name-only --diff-filter=d $env:BASE_SHA HEAD -- 'bucket/*.json' |
+              ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_) })
+          if ($names.Count -eq 0) {
+              $names = @(Get-ChildItem bucket -Filter '*.json' | ForEach-Object { $_.BaseName })
+          }
+          if ($names.Count -eq 0) { throw 'bucket にマニフェストがありません' }
+          Write-Host "検証対象: $($names -join ', ')"
+          ./.github/scripts/verify-manifests.ps1 -ScoopRoot ./scoop -Name $names

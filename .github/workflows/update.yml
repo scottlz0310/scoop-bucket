@@ -14,6 +14,7 @@ on:
     paths:
       - .github/workflows/update.yml
       - .github/scripts/**
+      - .github/actions/setup-scoop/**
       - bucket/**
 
 permissions: {}
@@ -33,14 +34,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # checkver.ps1 は Scoop 本体のライブラリを使う。再現性のため SHA で固定する。
-      - name: Checkout Scoop
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ScoopInstaller/Scoop
-          ref: e6aa3b366bdee8ed138c1e0f7b85192ebdd35d0f # v0.6.0
-          path: scoop
-          persist-credentials: false
+      # checkver.ps1 は Scoop 本体のライブラリを使う。SHA 固定は verify.yml と共通の action に置く。
+      - uses: ./.github/actions/setup-scoop
 
       - name: Check and update manifests
         shell: pwsh
