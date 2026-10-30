@@ -4,7 +4,12 @@ name: Update Manifests
 # 更新があれば Bot（GitHub App）名義で更新 PR を作る。main への直接 push は ruleset で禁止されているため、
 # 更新は必ず PR になり、マージは人が行う。
 # 即時に反映したいときは、Actions の「Run workflow」（workflow_dispatch）から手動で起動する。
-# pull_request では checkver の確認だけを行い、PR は作らない（workflow / マニフェスト変更の検証用）。
+# pull_request では checkver の確認だけを行い、PR や Issue は作らない（workflow / マニフェスト変更の検証用）。
+#
+# 失敗の扱い: マニフェストごとに独立して実行し、1 つが失敗しても他の更新を巻き込まない（check-manifests.ps1）。
+# 失敗したマニフェストは、report ジョブが Issue で通知し、復旧すると自動で閉じる。実行自体も失敗にする。
+# checkver を実行する update ジョブには書き込み権限を持たせず、結果の JSON だけを受け取る report ジョブに分ける
+# （Scoop 本体やマニフェストの checkver スクリプトを実行する間に、Issue や workflow を操作できる権限を持たないため）。
 
 on:
   schedule:
@@ -39,7 +44,16 @@ jobs:
 
       - name: Check and update manifests
         shell: pwsh
-        run: ./scoop/bin/checkver.ps1 -Dir bucket -Update -ThrowError
+        run: ./.github/scripts/check-manifests.ps1 -ScoopRoot ./scoop -ResultPath "$env:RUNNER_TEMP/check-result.json"
+
+      - name: Upload check result
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: check-result
+          path: ${{ runner.temp }}/check-result.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Detect changes
         id: changes
@@ -71,3 +85,52 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: bash .github/scripts/open-update-prs.sh
+
+      # 成功したマニフェストの更新 PR を先に作ってから、失敗があれば実行を失敗にする
+      - name: Fail if any manifest failed
+        shell: pwsh
+        run: |
+          $results = @(Get-Content "$env:RUNNER_TEMP/check-result.json" -Raw | ConvertFrom-Json)
+          $failed = @($results | Where-Object { -not $_.ok })
+          foreach ($f in $failed) { Write-Host "::error title=$($f.name)::更新の確認に失敗した" }
+          if ($failed.Count -gt 0) { exit 1 }
+
+  report:
+    needs: update
+    # update が失敗しても（失敗の通知のために）実行する。pull_request では Issue を作らない。
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.update.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download check result
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: check-result
+          path: ${{ runner.temp }}/check-result
+
+      # 結果が無い（update ジョブが結果を出す前に失敗した）ときは、通知しない。実行の失敗自体が通知になる。
+      - name: Notify failures
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .github/scripts/notify-update-failures.sh "$RUNNER_TEMP/check-result/check-result.json"
+
+      # scheduled workflow は、リポジトリに 60 日間活動が無いと GitHub に無効化される。
+      # 有効化の API を毎回呼んで、無効化を避ける（効果は未検証。失敗しても通知や更新には影響させない）。
+      - name: Keep schedule enabled
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: gh workflow enable update.yml --repo "$REPOSITORY"
