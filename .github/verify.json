@@ -7,5 +7,14 @@
                 "args": ["--version"]
             }
         ]
+    },
+    "agent-statusline": {
+        "commands": [
+            {
+                "since": "0.5.0",
+                "command": "agent-statusline",
+                "args": ["--version"]
+            }
+        ]
     }
 }
