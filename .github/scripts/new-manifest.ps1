@@ -133,9 +133,18 @@ function New-ManifestObject {
     }
     Test-Pattern $spdx '^[A-Za-z0-9][A-Za-z0-9 .()+-]*$' 'License'
 
+    # autoupdate の URL のテンプレートは、URL 全体の版の文字列を置換するのではなく、部品から組み立てる。
+    # 置換だと、版と同じ文字列を含む repo 名（tool-1.2.3 など）や、版を含む固定の資産名まで $version に置き換わり、
+    # 次の版で別の repo を指して更新に失敗する。テンプレート化するのは、タグ部分と、AssetPattern の {version} だけ。
     $url = [string] $asset.browser_download_url
-    $urlTemplate = $url.Replace($version, '$version')
-    if ($urlTemplate -ceq $url) { throw "URL に版 '$version' が含まれない。autoupdate の URL を作れない: $url" }
+    $tagTemplate = if ($tag.StartsWith('v')) { 'v$version' } else { '$version' }
+    $assetTemplate = $AssetPattern.Replace('{name}', $repoName).Replace('{version}', '$version')
+    $urlTemplate = "https://github.com/$Repository/releases/download/$tagTemplate/$assetTemplate"
+    # 組み立てたテンプレートを現行の版に展開して、実際の URL と一致することを確認する（GitHub の URL の形が想定と違えば拒否する）
+    if ($urlTemplate.Replace('$version', $version) -cne $url) {
+        throw "URL のテンプレートを組み立てられない。現行の版に展開しても、実際の URL と一致しない（テンプレート: $urlTemplate / 実際: $url）"
+    }
+    if (-not $urlTemplate.Contains('$version')) { throw "URL に版の変数がない。autoupdate で次の版を取得できない（タグ: $tag / 資産: $assetName）" }
 
     $manifest = [ordered]@{
         version      = $version

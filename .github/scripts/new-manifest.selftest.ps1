@@ -26,10 +26,10 @@ $base = 'https://github.com/scottlz0310/clp2cfg/releases/download'
 $winZip = 'clp2cfg-x86_64-pc-windows-msvc.zip'
 
 function New-Release {
-    param([string] $Tag = 'v0.1.0', [string[]] $Assets = @($winZip, "$winZip.sha256"), [bool] $Draft = $false, [bool] $Prerelease = $false)
+    param([string] $Tag = 'v0.1.0', [string[]] $Assets = @($winZip, "$winZip.sha256"), [bool] $Draft = $false, [bool] $Prerelease = $false, [string] $Repo = 'scottlz0310/clp2cfg')
     [pscustomobject]@{
         tag_name = $Tag; draft = $Draft; prerelease = $Prerelease
-        assets   = @($Assets | ForEach-Object { [pscustomobject]@{ name = $_; browser_download_url = "$base/$Tag/$_" } })
+        assets   = @($Assets | ForEach-Object { [pscustomobject]@{ name = $_; browser_download_url = "https://github.com/$Repo/releases/download/$Tag/$_" } })
     }
 }
 function New-RepoInfo {
@@ -155,6 +155,40 @@ $okCases = @(
        Case = @{ Args = $clpArgs }
        Check = { param($j) $j.checkver -ceq 'github' -and $j.autoupdate.architecture.'64bit'.hash.url -ceq '$url.sha256' } }
 )
+
+# 3b. autoupdate の URL のテンプレートを、次の版へ展開して、独立に組み立てた URL と比較する（性質ベース）。
+# 現行の版へ展開して元の URL に戻ることしか見ないと、版と同じ文字列を含む repo 名や固定の資産名まで置換されても気づけない
+# （repo 名 tool-1.2.3 の場合、次の 1.2.4 で別の repo tool-1.2.4 を指して、更新に失敗する）。
+# 期待する URL は、置換ではなく、repo・タグ・資産名の部品から作る。
+$urlCases = @(
+    # 名前 / repo / 現行の版 / 次の版 / タグの接頭辞 / AssetPattern / 資産名の組み立て（{n}=版）
+    @{ Name = '指摘の例: repo 名が現行の版を含む（tool-1.2.3）、既定の資産名'; Repo = 'tool-1.2.3'; Cur = '1.2.3'; Next = '1.2.4'; Prefix = 'v'; Pattern = '{name}-x86_64-pc-windows-msvc.zip'; Asset = { param($v) 'tool-1.2.3-x86_64-pc-windows-msvc.zip' } }
+    @{ Name = 'repo 名が現行の版を含む、資産名に {version} も使う'; Repo = 'tool-1.2.3'; Cur = '1.2.3'; Next = '1.2.4'; Prefix = 'v'; Pattern = '{name}-{version}-x64.zip'; Asset = { param($v) "tool-1.2.3-$v-x64.zip" } }
+    @{ Name = '固定の資産名が現行の版を含む（{version} を使わない）'; Repo = 'app'; Cur = '2.0.0'; Next = '2.0.1'; Prefix = 'v'; Pattern = 'app-2.0.0-fixed.zip'; Asset = { param($v) 'app-2.0.0-fixed.zip' } }
+    @{ Name = 'タグに v が無い、資産名に {version}'; Repo = 'app'; Cur = '3.1.4'; Next = '3.1.5'; Prefix = ''; Pattern = '{name}-{version}.zip'; Asset = { param($v) "app-$v.zip" } }
+    @{ Name = '版の桁が重なる（repo 名が 1.2、版が 1.2.3）'; Repo = 'lib-1.2'; Cur = '1.2.3'; Next = '1.2.10'; Prefix = 'v'; Pattern = '{name}-x64.zip'; Asset = { param($v) 'lib-1.2-x64.zip' } }
+)
+foreach ($u in $urlCases) {
+    $curAsset = & $u.Asset $u.Cur
+    $tag = "$($u.Prefix)$($u.Cur)"
+    $case = @{
+        Repository = "scottlz0310/$($u.Repo)"
+        Release    = (New-Release -Tag $tag -Repo "scottlz0310/$($u.Repo)" -Assets @($curAsset, "$curAsset.sha256"))
+        Sha        = "$hash *$curAsset"
+        RepoInfo   = (New-RepoInfo)
+        Args       = @{ Description = 'd'; License = 'MIT'; AssetPattern = $u.Pattern; Bin = 'x.exe' }
+    }
+    $r = Invoke-Case $case
+    if (-not $r.Ok) { $failed += "URL: $($u.Name): 生成に失敗した: $($r.Message)"; continue }
+    $template = $r.Json.autoupdate.architecture.'64bit'.url
+    $expanded = $template.Replace('$version', $u.Next)
+    $expected = "https://github.com/scottlz0310/$($u.Repo)/releases/download/$($u.Prefix)$($u.Next)/$(& $u.Asset $u.Next)"
+    $current = $r.Json.architecture.'64bit'.url
+    if ($current -cne "https://github.com/scottlz0310/$($u.Repo)/releases/download/$tag/$curAsset") { $failed += "URL: $($u.Name): 現行の URL が違う: $current" }
+    elseif ($expanded -cne $expected) { $failed += "URL: $($u.Name): 次の版へ展開した URL が違う`n  展開: $expanded`n  期待: $expected" }
+    else { Write-Host "OK: URL: $($u.Name) → 次の版へ展開すると期待どおり" }
+}
+
 foreach ($c in $okCases) {
     $r = Invoke-Case $c.Case
     if (-not $r.Ok) { $failed += "$($c.Name): 生成に失敗した: $($r.Message)" }
