@@ -35,12 +35,29 @@ $results = foreach ($file in Get-ChildItem $BucketDir -Filter '*.json' | Sort-Ob
     $lines | Out-Host
     Write-Host '::endgroup::'
 
-    if ($exitCode -eq 0) {
+    # 終了コードが 0 でも、最新版を確認できたとは限らない。checkver は、最新版の取得先に届かない、
+    # 正規表現が一致しないといった失敗を、エラーを表示するだけで次へ進み（-ThrowError が効くのは
+    # autoupdate の例外だけ）、終了コード 0 で終わる。成功なら、「<名前>: <版>」の行（更新があれば
+    # 「 (scoop version is …)」が続く）を出力するので、それが出たかも見る。エラーの文には、数字を含まない
+    # 1 語の文があり得るため、版は数字を含む語とする。
+    $manifest = Get-Content $file.FullName -Raw | ConvertFrom-Json
+    $hasCheckver = $manifest.PSObject.Properties.Name -contains 'checkver'
+    $versionLine = "^$([regex]::Escape($name)): (?=\S*\d)\S+( \(scoop version is [^)]*\).*)?$"
+    $reportedVersion = @($lines | ForEach-Object { ($_ -replace '\x1b\[[0-9;]*m', '').Trim() } | Where-Object { $_ -match $versionLine })
+
+    $reason = $null
+    if ($exitCode -ne 0) {
+        $reason = "checkver が失敗した（終了コード $exitCode）"
+    } elseif ($hasCheckver -and $reportedVersion.Count -eq 0) {
+        $reason = '最新版を確認できなかった（checkver が版を報告しなかった。取得先に届かない、または正規表現が一致しない）'
+    }
+
+    if ($null -eq $reason) {
         [pscustomobject]@{ name = $name; ok = $true; message = '' }
     } else {
         [IO.File]::WriteAllText($file.FullName, $original)
         # 通知に載せるのは末尾だけ（長い出力で Issue を埋めない）
-        $message = ($lines | Select-Object -Last 15) -join "`n"
+        $message = "$reason`n" + (($lines | Select-Object -Last 15) -join "`n")
         if ($message.Length -gt 2000) { $message = $message.Substring($message.Length - 2000) }
         [pscustomobject]@{ name = $name; ok = $false; message = $message }
     }
