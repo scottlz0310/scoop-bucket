@@ -7,8 +7,7 @@ name: Validate CI Policy
 on:
   pull_request:
     paths:
-      - .review-raven/ci-policy.json
-      - .github/scripts/validate-ci-policy.sh
+      - .review-raven/**
       - .github/workflows/validate-ci-policy.yml
 
 permissions: {}
@@ -24,4 +23,4 @@ jobs:
           persist-credentials: false
 
       - name: Validate ci-policy.json
-        run: bash .github/scripts/validate-ci-policy.sh .review-raven/ci-policy.json
+        run: bash .review-raven/validate-ci-policy.sh .review-raven/ci-policy.json

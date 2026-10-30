@@ -34,7 +34,7 @@ scoop install <app>
 
 - 宣言は、**PR の HEAD ではなく、base ref（`main`）のファイルだけ**が読まれます。PR 自身が、自分の skip を許可することはできません。このファイルを追加・変更する PR は、その PR のレビューには反映されません。
 - 許可するのは、名前が完全一致する `skipped` だけです。本来動くべき check（`verify` など）が黙って `skipped` になった場合は、許可されず、失敗として扱われます。
-- 形式は `.github/scripts/validate-ci-policy.sh` が検証します。
+- 形式は `.review-raven/validate-ci-policy.sh` が検証します。
 
 ## ライセンス
 

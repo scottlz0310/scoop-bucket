@@ -19,8 +19,8 @@ on:
       - .github/scripts/check-manifests.selftest.ps1
       - .github/scripts/notify-update-failures.sh
       - .github/scripts/notify-update-failures.test.sh
-      - .github/scripts/validate-ci-policy.sh
-      - .github/scripts/validate-ci-policy.test.sh
+      - .review-raven/validate-ci-policy.sh
+      - .review-raven/validate-ci-policy.test.sh
       - .github/actions/setup-scoop/**
       - .github/workflows/verify.yml
 
@@ -71,10 +71,10 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # .github 配下の変更が無ければ（マニフェストだけの変更なら）省略する
-          $infra = @(git diff --name-only $env:BASE_SHA HEAD -- .github)
+          # .github と .review-raven 配下の変更が無ければ（マニフェストだけの変更なら）省略する
+          $infra = @(git diff --name-only $env:BASE_SHA HEAD -- .github .review-raven)
           if ($infra.Count -eq 0) {
-              Write-Host '.github 配下に変更が無いため、selftest を省略する'
+              Write-Host '.github と .review-raven 配下に変更が無いため、selftest を省略する'
               exit 0
           }
           # スクリプトの呼び出しは、失敗しても後続を止めない。1 つずつ終了コードを確認する
@@ -84,5 +84,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bash ./.github/scripts/notify-update-failures.test.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          bash ./.github/scripts/validate-ci-policy.test.sh
+          bash ./.review-raven/validate-ci-policy.test.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -47,4 +47,20 @@ run_case "前に空白のある名前" '{"version":1,"allowedSkippedChecks":[" r
 run_case "後ろに空白のある名前" '{"version":1,"allowedSkippedChecks":["report "]}' 1 "前後に空白"
 run_case "重複した名前" '{"version":1,"allowedSkippedChecks":["report","report"]}' 1 "重複"
 
+# jq は、読む側の厳密な JSON パーサーより広く受理する入力。検証器を通った宣言が、読む側で拒否されないようにする。
+# 複数の JSON 文書（jq は連結を受理し、-e は最後の結果で判定する。先頭の不正な文書が、後続の正常な文書の陰で通る）
+run_case "複数文書: 不正（version 2）+ 正常" $'{"version":2,"allowedSkippedChecks":["verify"]}\n{"version":1,"allowedSkippedChecks":["report"]}' 1 "文書が 1 個ではない"
+run_case "複数文書: 正常 + 正常" $'{"version":1,"allowedSkippedChecks":["a"]}\n{"version":1,"allowedSkippedChecks":["b"]}' 1 "文書が 1 個ではない"
+run_case "複数文書: 正常 + 不正" $'{"version":1,"allowedSkippedChecks":["report"]}\n{"version":2,"allowedSkippedChecks":["x"]}' 1 "文書が 1 個ではない"
+# 重複キー（jq は後勝ちで受理する）
+run_case "重複キー: version" '{"version":1,"version":1,"allowedSkippedChecks":["a"]}' 1 "キーが重複"
+run_case "重複キー: 配列（どちらも非空）" '{"version":1,"allowedSkippedChecks":["a"],"allowedSkippedChecks":["b"]}' 1 "キーが重複"
+run_case "重複キー: 空配列のあとに非空配列（後勝ちで通る）" '{"version":1,"allowedSkippedChecks":[],"allowedSkippedChecks":["a"]}' 1 "キーが重複"
+run_case "重複キー: 非空配列のあとに空配列" '{"version":1,"allowedSkippedChecks":["a"],"allowedSkippedChecks":[]}' 1 "キーが重複"
+# UTF-8 BOM（厳密なパーサーは拒否する）
+run_case "UTF-8 BOM つき" $'\xef\xbb\xbf{"version":1,"allowedSkippedChecks":["report"]}' 1 "BOM"
+# 末尾の改行や空白は問題ない（エディタが付ける）
+run_case "末尾に改行" $'{"version":1,"allowedSkippedChecks":["report"]}\n' 0 "OK:"
+run_case "整形された JSON（複数行）" $'{\n  "version": 1,\n  "allowedSkippedChecks": [\n    "report"\n  ]\n}\n' 0 "OK:"
+
 exit "$fail"
