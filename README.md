@@ -22,8 +22,8 @@ scoop install <app>
 <!-- apps:begin -->
 | アプリケーション | 説明 |
 |---|---|
-| [**agent-statusline**](https://github.com/scottlz0310/agent-statusline) | High-performance, zero-fork statusline for AI coding agents (Antigravity, Claude Code, GitHub Copilot) |
-| [**clp2cfg**](https://github.com/scottlz0310/clp2cfg) | Lightweight desktop GUI for parsing MCP server configurations and merging them into AI client configs |
+| [**agent-statusline**](https://github.com/scottlz0310/agent-statusline) | カスタムステータスライン対応の各種CLI(claude-code copilot-cli antigravity-cli)等のプロンプト表示を超高速化するRust製ステータスライン。TUI設定機能・レートリミット監視・自動配布対応。 |
+| [**clp2cfg**](https://github.com/scottlz0310/clp2cfg) | コピーしたMCP設定スニペットを自動正規化し、各種AIクライアントの設定へ安全に差分マージする超軽量デスクトップGUIツール |
 <!-- apps:end -->
 
 ## マニフェストの自動更新
@@ -44,7 +44,7 @@ Actions の「Add Manifest」から「Run workflow」で `owner/repo` を入力�
 
 ## 登録アプリケーション一覧の自動生成
 
-一覧は、`bucket/*.json` の `description` と `homepage` から `.github/scripts/render-readme-apps.sh` が生成します。生成範囲は README の `<!-- apps:begin -->` と `<!-- apps:end -->` の間だけで、直接編集しません。説明を変えたいときは、マニフェストの `description` を変えて、スクリプトを実行します。PR では `Check README` が、一覧がマニフェストと一致していることを検査します。
+一覧は、`bucket/*.json` の `description` と `homepage` から `.github/scripts/render-readme-apps.sh` が生成します。生成範囲は README の `<!-- apps:begin -->` と `<!-- apps:end -->` の間だけで、直接編集しません。説明は日本語で書きます（このバケットのアプリは作者自身のツールで、一覧と `scoop info` の表示を揃えるため）。変えたいときは、マニフェストの `description` を変えて、スクリプトを実行します。PR では `Check README` が、一覧がマニフェストと一致していることを検査します。
 
 ## レビュー対応の CI 判定（`.review-raven/ci-policy.json`）
 

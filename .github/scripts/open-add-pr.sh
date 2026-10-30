@@ -51,6 +51,6 @@ gh pr create --repo "$REPOSITORY" --base "$BASE_BRANCH" --head "$branch" \
     "" \
     "### マージ前に確認すること" \
     "- [ ] \`Verify Manifests\`（隔離した Scoop へのインストール）が成功している" \
-    "- [ ] \`description\` / \`license\` / \`bin\` / \`shortcuts\` が、アプリの実際の内容と合っている" \
+    "- [ ] \`description\` / \`license\` / \`bin\` / \`shortcuts\` が、アプリの実際の内容と合っている。\`description\` は日本語にする（README の一覧に表示される。変えたら \`.github/scripts/render-readme-apps.sh\` を実行して、一覧も同じ PR で更新する）" \
     "- [ ] ヘッドレスで確認できるコマンド（\`--version\` など）があれば、\`.github/verify.json\` に追加する" \
     "- [ ] \`persist\` / \`pre_install\` などが要るアプリではないこと（足場は、これらを生成しない）")"

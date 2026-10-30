@@ -1,6 +1,6 @@
 {
     "version": "0.1.0",
-    "description": "Lightweight desktop GUI for parsing MCP server configurations and merging them into AI client configs",
+    "description": "コピーしたMCP設定スニペットを自動正規化し、各種AIクライアントの設定へ安全に差分マージする超軽量デスクトップGUIツール",
     "homepage": "https://github.com/scottlz0310/clp2cfg",
     "license": "MIT OR Apache-2.0",
     "architecture": {
