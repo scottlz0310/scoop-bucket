@@ -3,7 +3,8 @@ name: Verify Manifests
 # マニフェストを変更する PR で、インストールまで検証する。検査の内容は .github/scripts/verify-manifests.ps1 を参照。
 # 更新 PR（Update Manifests が App トークンで作る PR）でも起動する。
 # マニフェストが変わっていない（workflow やスクリプトだけの変更）ときは、すべてのマニフェストを検証する。
-# selftest は、検証スクリプト自体の回帰テスト。意図的に壊した fixture で、失敗を検出できることを確認する。
+# selftest は、スクリプト自体の回帰テスト。意図的に壊した fixture で、失敗を検出できることを確認する
+# （検証スクリプト、更新の失敗の隔離、失敗の通知）。
 # マニフェストだけを変える PR（更新 PR など）では不要なので、.github 配下の変更があるときだけ実行する。
 
 on:
@@ -14,6 +15,10 @@ on:
       - .github/verify-fixtures/**
       - .github/scripts/verify-manifests.ps1
       - .github/scripts/verify-manifests.selftest.ps1
+      - .github/scripts/check-manifests.ps1
+      - .github/scripts/check-manifests.selftest.ps1
+      - .github/scripts/notify-update-failures.sh
+      - .github/scripts/notify-update-failures.test.sh
       - .github/actions/setup-scoop/**
       - .github/workflows/verify.yml
 
@@ -59,7 +64,7 @@ jobs:
 
       - uses: ./.github/actions/setup-scoop
 
-      - name: Self-test verify-manifests.ps1
+      - name: Self-test scripts
         shell: pwsh
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -70,4 +75,10 @@ jobs:
               Write-Host '.github 配下に変更が無いため、selftest を省略する'
               exit 0
           }
+          # スクリプトの呼び出しは、失敗しても後続を止めない。1 つずつ終了コードを確認する
           ./.github/scripts/verify-manifests.selftest.ps1 -ScoopRoot ./scoop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./.github/scripts/check-manifests.selftest.ps1 -ScoopRoot ./scoop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bash ./.github/scripts/notify-update-failures.test.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
