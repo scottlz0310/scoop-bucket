@@ -1,0 +1,34 @@
+{
+    "version": "0.1.0",
+    "description": "Lightweight desktop GUI for parsing MCP server configurations and merging them into AI client configs",
+    "homepage": "https://github.com/scottlz0310/clp2cfg",
+    "license": "MIT OR Apache-2.0",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/scottlz0310/clp2cfg/releases/download/v0.1.0/clp2cfg-x86_64-pc-windows-msvc.zip",
+            "hash": "7e9d51770955833e2ae993a8d01feba4e1cdb83e61f232b286c32794b924111f"
+        }
+    },
+    "bin": "clp2cfg.exe",
+    "shortcuts": [
+        [
+            "clp2cfg.exe",
+            "clp2cfg"
+        ]
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/scottlz0310/clp2cfg/releases/download/v$version/clp2cfg-x86_64-pc-windows-msvc.zip",
+                "hash": {
+                    "url": "$url.sha256"
+                }
+            }
+        },
+        "bin": [
+            "clp2cfg.exe",
+            "clp2cfg-cli.exe"
+        ]
+    }
+}

@@ -40,10 +40,12 @@ $ScoopRoot = $scoopCurrent
 
 function Invoke-ScoopScript {
     # Scoop のスクリプトは exit で終わるため、子プロセスで実行して終了コードを受け取る。
-    # 出力は戻り値に混ざらないよう、画面へ流す。
+    # 出力は画面へ流しつつ、出力の内容でも判定できるよう、終了コードと一緒に返す。
     param([string] $Script, [string[]] $Arguments)
-    & pwsh -NoProfile -File (Join-Path $ScoopRoot "bin/$Script.ps1") @Arguments | Out-Host
-    return $LASTEXITCODE
+    $lines = @(& pwsh -NoProfile -File (Join-Path $ScoopRoot "bin/$Script.ps1") @Arguments 2>&1 | ForEach-Object { $_.ToString() })
+    $exitCode = $LASTEXITCODE
+    $lines | Out-Host
+    return [pscustomobject]@{ ExitCode = $exitCode; Output = ($lines -join "`n") }
 }
 
 function Get-ManifestUrlsAndHashes {
@@ -68,7 +70,7 @@ function Test-Manifest {
     $original = [IO.File]::ReadAllText($file)
 
     # 1. 整形（改行コードの違いは無視する。リポジトリは LF に固定している）
-    if ((Invoke-ScoopScript 'formatjson' @('-App', $AppName, '-Dir', $BucketDir)) -ne 0) {
+    if ((Invoke-ScoopScript 'formatjson' @('-App', $AppName, '-Dir', $BucketDir)).ExitCode -ne 0) {
         $failures += 'formatjson の実行に失敗'
     } else {
         $formatted = [IO.File]::ReadAllText($file)
@@ -84,16 +86,21 @@ function Test-Manifest {
     # 2. autoupdate が現在の URL とハッシュを再現するか
     if ($manifest.PSObject.Properties.Name -contains 'autoupdate') {
         $before = Get-ManifestUrlsAndHashes $file
-        $code = Invoke-ScoopScript 'checkver' @($AppName, $BucketDir, '-ForceUpdate', '-Version', $manifest.version)
+        # -ThrowError が無いと、checkver は更新中の例外を表示するだけで終了コード 0 を返し、失敗を見逃す
+        $checkver = Invoke-ScoopScript 'checkver' @($AppName, $BucketDir, '-ForceUpdate', '-Version', $manifest.version, '-ThrowError')
         $after = Get-ManifestUrlsAndHashes $file
         [IO.File]::WriteAllText($file, $original)
-        if ($code -ne 0) {
-            $failures += "checkver の実行に失敗（終了コード $code）"
+        if ($checkver.ExitCode -ne 0) {
+            $failures += "checkver の実行に失敗（終了コード $($checkver.ExitCode)）"
         } else {
             foreach ($key in $before.Keys) {
                 if ($before[$key] -ne $after[$key]) {
                     $failures += "autoupdate が現行値を再現しない: $key（現行: $($before[$key]) / 再現: $($after[$key])）"
                 }
+            }
+            # hash.url から取得できないと、Scoop は黙ってダウンロードして計算する代替に落ち、結果が同じになって見逃す
+            if ($checkver.Output -match 'Could not find hash in') {
+                $failures += 'autoupdate のハッシュ取得先（hash.url）から取得できない（ダウンロードして計算する代替に落ちた）'
             }
         }
     }
@@ -101,9 +108,9 @@ function Test-Manifest {
     # 3. インストール（失敗したら、以降の検査は意味がない）。
     # scoop install は、ハッシュの検証に失敗しても終了コード 0 を返す。そのため終了コードに加えて、
     # インストールの完了時に作られる apps/<名前>/current の有無で判定する。
-    $installCode = Invoke-ScoopScript 'scoop' @('install', $file)
-    if ($installCode -ne 0 -or -not (Test-Path (Join-Path $scoopHome "apps/$AppName/current"))) {
-        return $failures + "scoop install に失敗（終了コード $installCode。ハッシュの不一致や URL の取得失敗などで、current が作られなかった）"
+    $install = Invoke-ScoopScript 'scoop' @('install', $file)
+    if ($install.ExitCode -ne 0 -or -not (Test-Path (Join-Path $scoopHome "apps/$AppName/current"))) {
+        return $failures + "scoop install に失敗（終了コード $($install.ExitCode)。ハッシュの不一致や URL の取得失敗などで、current が作られなかった）"
     }
 
     # 4. 動作確認
@@ -128,7 +135,7 @@ function Test-Manifest {
     }
 
     # 5. アンインストール
-    if ((Invoke-ScoopScript 'scoop' @('uninstall', $AppName)) -ne 0) {
+    if ((Invoke-ScoopScript 'scoop' @('uninstall', $AppName)).ExitCode -ne 0) {
         $failures += 'scoop uninstall に失敗'
     }
     return $failures
