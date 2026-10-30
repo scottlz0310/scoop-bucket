@@ -23,5 +23,6 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
+      # --bun を付けないと、bunx は実行ファイルの shebang に従って Node で動かす。Bun のランタイムで実行する
       - name: Validate renovate.json
-        run: bunx --package renovate renovate-config-validator renovate.json
+        run: bunx --bun --package renovate renovate-config-validator renovate.json
