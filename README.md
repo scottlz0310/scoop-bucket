@@ -23,6 +23,7 @@ scoop install <app>
 | アプリケーション | 説明 |
 |---|---|
 | [**agent-statusline**](https://github.com/scottlz0310/agent-statusline) | カスタムステータスライン対応の各種CLI(claude-code copilot-cli antigravity-cli)等のプロンプト表示を超高速化するRust製ステータスライン。TUI設定機能・レートリミット監視・自動配布対応。 |
+| [**card-template-studio**](https://github.com/scottlz0310/card-template-studio) | 現場編集長アルバムのカードテンプレート（.TPL）編集アプリ |
 | [**clp2cfg**](https://github.com/scottlz0310/clp2cfg) | コピーしたMCP設定スニペットを自動正規化し、各種AIクライアントの設定へ安全に差分マージする超軽量デスクトップGUIツール |
 <!-- apps:end -->
 

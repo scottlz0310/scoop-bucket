@@ -1,0 +1,30 @@
+{
+    "version": "0.1.1",
+    "description": "現場編集長アルバムのカードテンプレート（.TPL）編集アプリ",
+    "homepage": "https://github.com/scottlz0310/card-template-studio",
+    "license": "MIT OR Apache-2.0",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/scottlz0310/card-template-studio/releases/download/v0.1.1/card-template-studio-x86_64-pc-windows-msvc.zip",
+            "hash": "cd0eb9c44ae0f809ac179365d154945a10b18f1144ee463ee40c1ea7a3a1d877"
+        }
+    },
+    "bin": "card-template-studio.exe",
+    "shortcuts": [
+        [
+            "card-template-studio.exe",
+            "Card Template Studio"
+        ]
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/scottlz0310/card-template-studio/releases/download/v$version/card-template-studio-x86_64-pc-windows-msvc.zip",
+                "hash": {
+                    "url": "$url.sha256"
+                }
+            }
+        }
+    }
+}
