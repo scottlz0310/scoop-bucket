@@ -9,28 +9,6 @@ name: Verify Manifests
 
 on:
   pull_request:
-    paths:
-      - bucket/**
-      - .github/verify.json
-      - .github/verify-fixtures/**
-      - .github/scripts/verify-manifests.ps1
-      - .github/scripts/verify-manifests.selftest.ps1
-      - .github/scripts/check-manifests.ps1
-      - .github/scripts/check-manifests.selftest.ps1
-      - .github/scripts/notify-failures.sh
-      - .github/scripts/notify-failures.test.sh
-      - .github/scripts/health-check.ps1
-      - .github/scripts/health-check.selftest.ps1
-      - .github/health-fixtures/**
-      - .review-raven/validate-ci-policy.sh
-      - .review-raven/validate-ci-policy.test.sh
-      - .github/scripts/new-manifest.ps1
-      - .github/scripts/new-manifest.selftest.ps1
-      - .github/scripts/remote-text.ps1
-      - .github/scripts/open-add-pr.sh
-      - .github/scripts/open-add-pr.test.sh
-      - .github/actions/setup-scoop/**
-      - .github/workflows/verify.yml
 
 permissions: {}
 
@@ -45,9 +23,34 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-scoop
+      - name: Check changed paths
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" HEAD -- \
+            bucket .github/verify.json .github/verify-fixtures \
+            .github/scripts/verify-manifests.ps1 .github/scripts/verify-manifests.selftest.ps1 \
+            .github/scripts/check-manifests.ps1 .github/scripts/check-manifests.selftest.ps1 \
+            .github/scripts/notify-failures.sh .github/scripts/notify-failures.test.sh \
+            .github/scripts/health-check.ps1 .github/scripts/health-check.selftest.ps1 \
+            .github/health-fixtures .review-raven/validate-ci-policy.sh .review-raven/validate-ci-policy.test.sh \
+            .github/scripts/new-manifest.ps1 .github/scripts/new-manifest.selftest.ps1 \
+            .github/scripts/remote-text.ps1 .github/scripts/open-add-pr.sh .github/scripts/open-add-pr.test.sh \
+            .github/scripts/open-update-prs.sh .github/scripts/open-update-prs.test.sh \
+            .github/actions/setup-scoop .github/workflows/verify.yml; then
+            echo "検証対象に変更が無いため、verify を省略する"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.scope.outputs.should_run == 'true'
+        uses: ./.github/actions/setup-scoop
 
       - name: Verify manifests
+        if: steps.scope.outputs.should_run == 'true'
         shell: pwsh
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -99,4 +102,6 @@ jobs:
           ./.github/scripts/new-manifest.selftest.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bash ./.github/scripts/open-add-pr.test.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bash ./.github/scripts/open-update-prs.test.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

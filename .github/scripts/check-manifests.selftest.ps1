@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     check-manifests.ps1 の回帰テスト。「1 つのマニフェストの失敗が、他のマニフェストの更新を巻き込まない」ことと、
     「最新版を確認できなかった失敗を、成功と記録しない」ことを固定する。
@@ -92,6 +92,39 @@ foreach ($case in $cases) {
 if ($allFailed.Count -gt 0) {
     $allFailed | ForEach-Object { Write-Host "::error title=check selftest::$_" }
     exit 1
+}
+
+# -Manifest 指定時は対象 1 件だけを更新し、他の壊れたマニフェストに触れないことを確認する
+Write-Host '::group::check selftest: target-manifest'
+$targetWork = Join-Path ([IO.Path]::GetTempPath()) "check-selftest-target-$([guid]::NewGuid())"
+$targetResultPath = "$targetWork.result.json"
+New-Item -ItemType Directory $targetWork | Out-Null
+try {
+    [IO.File]::WriteAllText((Join-Path $targetWork 'a-broken.json'), '{invalid')
+    Copy-Item (Join-Path $fixtures 'bad-format.json') (Join-Path $targetWork 'b-good.json')
+
+    & pwsh -NoProfile -File $checkScript -ScoopRoot $ScoopRoot -BucketDir $targetWork -ResultPath $targetResultPath -Manifest 'b-good' | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "target-manifest が失敗した（終了コード $LASTEXITCODE）" }
+    $targetResults = @(Get-Content $targetResultPath -Raw | ConvertFrom-Json)
+    if ($targetResults.Count -ne 1 -or $targetResults[0].name -ne 'b-good' -or -not $targetResults[0].ok) {
+        throw "target-manifest の結果が b-good 1 件の成功ではない"
+    }
+
+    foreach ($badName in @('missing', '../b-good', 'BadName', 'a..b')) {
+        $rejected = $false
+        try {
+            & pwsh -NoProfile -File $checkScript -ScoopRoot $ScoopRoot -BucketDir $targetWork -ResultPath $targetResultPath -Manifest $badName 2>$null | Out-Null
+            if ($LASTEXITCODE -ne 0) { $rejected = $true }
+        } catch {
+            $rejected = $true
+        }
+        if (-not $rejected) { throw "不正または未存在の Manifest '$badName' を受け付けた" }
+    }
+    Write-Host 'OK: target-manifest で指定マニフェストのみ処理し、不正/未存在名を拒否した'
+} finally {
+    Remove-Item $targetWork -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item $targetResultPath -Force -ErrorAction SilentlyContinue
+    Write-Host '::endgroup::'
 }
 
 # 最後に実行した子プロセスの $LASTEXITCODE を、Actions の pwsh ステップに引き継がない

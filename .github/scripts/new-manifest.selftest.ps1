@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     new-manifest.ps1 の回帰テスト。外部アクセスを注入して、オフラインで検証する。
 .DESCRIPTION
@@ -101,11 +101,21 @@ $failCases = @(
 $failed = @()
 
 # 1. 基準: 実物の clp2cfg のリリースから、bucket/clp2cfg.json と一致するマニフェストが生成される
-$result = Invoke-Case @{ Args = $clpArgs }
+$real = Get-Content (Join-Path $RepoRoot 'bucket/clp2cfg.json') -Raw | ConvertFrom-Json -AsHashtable
+$realVer = $real.version
+$realHash = $real.architecture.'64bit'.hash
+$realArgs = $clpArgs.Clone()
+if ($real.ContainsKey('bin')) {
+    $realArgs.Bin = if ($real.bin -is [System.Collections.IList]) { $real.bin -join ',' } else { [string] $real.bin }
+}
+$result = Invoke-Case @{
+    Release = (New-Release -Tag "v$realVer")
+    Sha     = "$realHash *$winZip`n"
+    Args    = $realArgs
+}
 if (-not $result.Ok) {
     $failed += "基準（clp2cfg）: 生成に失敗した: $($result.Message)"
 } else {
-    $real = Get-Content (Join-Path $RepoRoot 'bucket/clp2cfg.json') -Raw | ConvertFrom-Json -AsHashtable
     $real.autoupdate.Remove('bin')    # clp2cfg 固有の手書き部分（clp2cfg-cli.exe）は、足場の対象外
     $gen = $result.Json | ConvertTo-Json -Depth 10 -Compress
     $exp = $real | ConvertTo-Json -Depth 10 -Compress

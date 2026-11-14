@@ -14,19 +14,26 @@ name: Update Manifests
 on:
   schedule:
     - cron: "17 3 * * *"
+  repository_dispatch:
+    types: [release-published]
   workflow_dispatch:
+    inputs:
+      manifest:
+        description: '更新するマニフェスト名（省略時は全件）'
+        required: false
+        type: string
+        default: ''
   pull_request:
-    paths:
-      - .github/workflows/update.yml
-      - .github/scripts/**
-      - .github/actions/setup-scoop/**
-      - bucket/**
 
 permissions: {}
 
 concurrency:
-  group: update-manifests
-  cancel-in-progress: false
+  group: >-
+    ${{
+      github.event_name == 'pull_request' && format('update-manifests-pr-{0}', github.event.number)
+      || format('update-manifests-{0}', (github.event_name == 'repository_dispatch' && github.event.client_payload.manifest) || inputs.manifest || 'all')
+    }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   update:
@@ -37,17 +44,71 @@ jobs:
       - name: Checkout bucket
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: ${{ fromJSON(github.event_name == 'pull_request' && '0' || '1') }}
           persist-credentials: false
 
+      - name: Resolve target manifest
+        id: target
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MANIFEST: ${{ github.event.client_payload.manifest }}
+          INPUT_MANIFEST: ${{ inputs.manifest }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == 'pull_request' ]]; then
+            git cat-file -e "${BASE_SHA}^{commit}"
+            diff_rc=0
+            git diff --quiet "$BASE_SHA" HEAD -- .github/workflows/update.yml .github/scripts .github/actions/setup-scoop bucket || diff_rc=$?
+            if [[ "$diff_rc" -eq 0 ]]; then
+              echo "更新スクリプト・マニフェストに変更が無いため、update チェックを省略する"
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "manifest=" >> "$GITHUB_OUTPUT"
+              exit 0
+            elif [[ "$diff_rc" -ne 1 ]]; then
+              echo "::error::git diff failed with exit code $diff_rc"
+              exit "$diff_rc"
+            fi
+          fi
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          manifest=''
+          if [[ "$EVENT_NAME" == 'repository_dispatch' ]]; then
+            manifest=$DISPATCH_MANIFEST
+          elif [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            manifest=$INPUT_MANIFEST
+          fi
+          if [[ -n "$manifest" ]]; then
+            if [[ "$manifest" == *..* || ! "$manifest" =~ ^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$ ]]; then
+              echo "::error::Invalid manifest name: '$manifest'"
+              exit 1
+            fi
+            if [[ ! -f "bucket/${manifest}.json" ]]; then
+              echo "::error::Manifest not found: bucket/${manifest}.json"
+              exit 1
+            fi
+          fi
+          echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
+
       # checkver.ps1 は Scoop 本体のライブラリを使う。SHA 固定は verify.yml と共通の action に置く。
-      - uses: ./.github/actions/setup-scoop
+      - if: steps.target.outputs.should_run == 'true'
+        uses: ./.github/actions/setup-scoop
 
       - name: Check and update manifests
+        if: steps.target.outputs.should_run == 'true'
         shell: pwsh
-        run: ./.github/scripts/check-manifests.ps1 -ScoopRoot ./scoop -ResultPath "$env:RUNNER_TEMP/check-result.json"
+        env:
+          TARGET_MANIFEST: ${{ steps.target.outputs.manifest }}
+        run: |
+          $params = @{
+            ScoopRoot  = './scoop'
+            ResultPath = "$env:RUNNER_TEMP/check-result.json"
+          }
+          if ($env:TARGET_MANIFEST) { $params.Manifest = $env:TARGET_MANIFEST }
+          ./.github/scripts/check-manifests.ps1 @params
 
       - name: Upload check result
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.target.outputs.should_run == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: check-result
@@ -57,6 +118,7 @@ jobs:
 
       - name: Detect changes
         id: changes
+        if: steps.target.outputs.should_run == 'true'
         shell: bash
         run: |
           if git diff --quiet -- bucket; then
@@ -88,6 +150,7 @@ jobs:
 
       # 成功したマニフェストの更新 PR を先に作ってから、失敗があれば実行を失敗にする
       - name: Fail if any manifest failed
+        if: steps.target.outputs.should_run == 'true'
         shell: pwsh
         run: |
           $results = @(Get-Content "$env:RUNNER_TEMP/check-result.json" -Raw | ConvertFrom-Json)
