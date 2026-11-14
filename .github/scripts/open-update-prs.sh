@@ -27,7 +27,19 @@ for manifest in $(git diff --name-only -- bucket); do
   branch="update/${name}-${version}"
 
   if [ -n "$(gh pr list --repo "$REPOSITORY" --head "$branch" --state all --json number --jq '.[].number')" ]; then
-    echo "$branch の PR はすでにあります。スキップします"
+    existing_open="$(gh pr list --repo "$REPOSITORY" --head "$branch" --state open --json number,autoMergeRequest --jq '.[0] | select(.) | "\(.number)\t\(.autoMergeRequest != null)"')"
+    if [ -n "$existing_open" ]; then
+      pr_number="${existing_open%%$'\t'*}"
+      has_auto_merge="${existing_open#*$'\t'}"
+      if [ "$has_auto_merge" != "true" ]; then
+        echo "$branch の open PR (#$pr_number) に自動マージを設定します"
+        gh pr merge --auto --squash --repo "$REPOSITORY" "$pr_number"
+      else
+        echo "$branch の PR (#$pr_number) は自動マージ設定済みです。スキップします"
+      fi
+    else
+      echo "$branch の PR はすでにあります。スキップします"
+    fi
     git checkout -- "$manifest"
     continue
   fi
@@ -43,7 +55,7 @@ for manifest in $(git diff --name-only -- bucket); do
     git switch --detach "$start"
   fi
 
-  gh pr create --repo "$REPOSITORY" --base "$BASE_BRANCH" --head "$branch" \
+  pr_url="$(gh pr create --repo "$REPOSITORY" --base "$BASE_BRANCH" --head "$branch" \
     --title "chore($name): v${version} に更新" \
     --body "$(printf '%s\n' \
       "checkver / autoupdate による自動更新です。" \
@@ -51,5 +63,7 @@ for manifest in $(git diff --name-only -- bucket); do
       "- リリース: ${homepage}/releases/tag/v${version}" \
       "- ハッシュは、リリースに添付された \`.sha256\` から取得しています。" \
       "" \
-      "マージ前に、差分（版・URL・ハッシュ・\`bin\`）がリリースの内容と一致することを確認してください。")"
+      "必須 CI（\`verify\`・\`readme\`・\`update\`）の通過後に自動マージされます。差分（版・URL・ハッシュ・\`bin\`）に問題がある場合は自動マージ前に確認してください。")")"
+
+  gh pr merge --auto --squash --repo "$REPOSITORY" "$pr_url"
 done

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     すべてのマニフェストを checkver で更新し、マニフェストごとの成否を JSON に記録する。update.yml から呼ばれる。
 .DESCRIPTION
@@ -10,11 +10,14 @@
     Scoop 本体のリポジトリのパス（setup-scoop が取得した ./scoop）。
 .PARAMETER ResultPath
     結果を書き出す JSON のパス。[{ name, ok, message }] の配列。
+.PARAMETER Manifest
+    特定のマニフェスト名だけを更新する場合に指定する（拡張子なし）。省略時は全件。
 #>
 param(
     [Parameter(Mandatory)][string] $ScoopRoot,
     [Parameter(Mandatory)][string] $ResultPath,
-    [string] $BucketDir = 'bucket'
+    [string] $BucketDir = 'bucket',
+    [string] $Manifest = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,7 +85,20 @@ function Test-OneManifest {
     }
 }
 
-$results = foreach ($file in Get-ChildItem $BucketDir -Filter '*.json' | Sort-Object Name) {
+if ($Manifest) {
+    if ($Manifest.Contains('..') -or $Manifest -cnotmatch '^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$') {
+        throw "不正なマニフェスト名です: $Manifest"
+    }
+    $targetFile = Join-Path $BucketDir "$Manifest.json"
+    if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf)) {
+        throw "指定されたマニフェストが見つかりません: $Manifest"
+    }
+    $targetFiles = @(Get-Item -LiteralPath $targetFile)
+} else {
+    $targetFiles = @(Get-ChildItem $BucketDir -Filter '*.json' | Sort-Object Name)
+}
+
+$results = foreach ($file in $targetFiles) {
     Test-OneManifest $file
 }
 
