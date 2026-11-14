@@ -28,8 +28,12 @@ on:
 permissions: {}
 
 concurrency:
-  group: update-manifests-${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.manifest) || inputs.manifest || 'all' }}
-  cancel-in-progress: false
+  group: >-
+    ${{
+      github.event_name == 'pull_request' && format('update-manifests-pr-{0}', github.event.number)
+      || format('update-manifests-{0}', (github.event_name == 'repository_dispatch' && github.event.client_payload.manifest) || inputs.manifest || 'all')
+    }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   update:
@@ -40,7 +44,7 @@ jobs:
       - name: Checkout bucket
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          fetch-depth: ${{ fromJSON(github.event_name == 'pull_request' && '0' || '1') }}
           persist-credentials: false
 
       - name: Resolve target manifest
@@ -54,11 +58,17 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$EVENT_NAME" == 'pull_request' ]]; then
-            if git diff --quiet "$BASE_SHA" HEAD -- .github/workflows/update.yml .github/scripts .github/actions/setup-scoop bucket; then
+            git cat-file -e "${BASE_SHA}^{commit}"
+            diff_rc=0
+            git diff --quiet "$BASE_SHA" HEAD -- .github/workflows/update.yml .github/scripts .github/actions/setup-scoop bucket || diff_rc=$?
+            if [[ "$diff_rc" -eq 0 ]]; then
               echo "更新スクリプト・マニフェストに変更が無いため、update チェックを省略する"
               echo "should_run=false" >> "$GITHUB_OUTPUT"
               echo "manifest=" >> "$GITHUB_OUTPUT"
               exit 0
+            elif [[ "$diff_rc" -ne 1 ]]; then
+              echo "::error::git diff failed with exit code $diff_rc"
+              exit "$diff_rc"
             fi
           fi
           echo "should_run=true" >> "$GITHUB_OUTPUT"
