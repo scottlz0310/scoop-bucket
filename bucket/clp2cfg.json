@@ -1,12 +1,12 @@
 {
-    "version": "0.3.1",
+    "version": "0.3.2",
     "description": "コピーしたMCP設定スニペットを自動正規化し、各種AIクライアントの設定へ安全に差分マージする超軽量デスクトップGUIツール",
     "homepage": "https://github.com/scottlz0310/clp2cfg",
     "license": "MIT OR Apache-2.0",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/scottlz0310/clp2cfg/releases/download/v0.3.1/clp2cfg-x86_64-pc-windows-msvc.zip",
-            "hash": "52962c9f07737591a0767b558603bd27e2bfab8cf92118f97d1850bf65940516"
+            "url": "https://github.com/scottlz0310/clp2cfg/releases/download/v0.3.2/clp2cfg-x86_64-pc-windows-msvc.zip",
+            "hash": "d856b05b09b2f515af07b2bd5c1a42b822a8908f0192d5994b6b5b0b1dc6c044"
         }
     },
     "bin": [
