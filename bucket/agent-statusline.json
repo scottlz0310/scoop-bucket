@@ -1,12 +1,12 @@
 {
-    "version": "0.6.0",
+    "version": "0.7.0",
     "description": "カスタムステータスライン対応の各種CLI(claude-code copilot-cli antigravity-cli)等のプロンプト表示を超高速化するRust製ステータスライン。TUI設定機能・レートリミット監視・自動配布対応。",
     "homepage": "https://github.com/scottlz0310/agent-statusline",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/scottlz0310/agent-statusline/releases/download/v0.6.0/agent-statusline-x86_64-pc-windows-msvc.zip",
-            "hash": "8848d66614b2a39d9255a72f926f08377848318b7eb92aad551b785121cfd8ec"
+            "url": "https://github.com/scottlz0310/agent-statusline/releases/download/v0.7.0/agent-statusline-x86_64-pc-windows-msvc.zip",
+            "hash": "f4675ebd5135c5ae8b06813a9247d5cc214a54c1e21f0b9a9103900784addd78"
         }
     },
     "bin": "agent-statusline.exe",
